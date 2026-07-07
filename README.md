@@ -1,203 +1,136 @@
-# ServiceSync-Dashboard
+# ServiceSync — Pilot Intelligence Dashboard
 
-**Service manager command center - real-time friction visualization**
+Internal founder tool ("mission control") for monitoring, exploring, and
+analyzing everything captured from the **Chevyland Chevrolet** pilot
+(Shreveport, LA — advisor `siltaylor`). Not customer-facing.
 
-Part of the ServiceSync Physical OS ecosystem - the "Decision Layer" that shows what's stuck, who owns it, and what needs action.
+Bloomberg-terminal-meets-Vercel: dark, dense, fast. Reads directly from S3 —
+no database in v1.
 
-## Purpose
+---
 
-ServiceSync-Dashboard is the service manager's command center. It visualizes real-time operational friction, physical movement patterns, and AI-generated insights to help managers make decisions and eliminate "The Walking Tax".
+## What it shows
 
-## Key Features
+| Page | Route | What |
+|------|-------|------|
+| **Overview** | `/` | System health (PC online, capture running, extension active) + storage/volume stats + recent activity feed |
+| **Audio** | `/audio` | Recording list, in-browser player (streamed from S3), transcript viewer with click-to-seek, full-text search within a transcript, one-click AWS Transcribe |
+| **Activity** | `/activity` | 24h session timeline, time-per-system chart, context-switch heatmap, session list, rapid-switch friction flags |
+| **Insights** | `/insights` | Daily summary, top friction patterns, transcript keyword highlights, recommendations, dealer-ready audit preview |
+| **Live** | `/live` | 30s-polling health, SSH quick actions (ffmpeg/disk/latest-audio/Chrome), trigger transcript for latest file |
 
-- **Real-Time Friction**: Live updates as friction events occur
-- **Physical Heatmaps**: Visualize "The Walk" patterns
-- **Decision Layer**: "What's stuck, who owns it, what needs action"
-- **Advisor Productivity**: Track efficiency metrics
-- **AI Insights**: Automated recommendations
-- **Friction Reports**: Daily/weekly operational intelligence
+---
 
-## Architecture
+## Data sources
 
-```
-n8n Intelligence Engine (API)
-    ↓
-Supabase (Real-time subscriptions)
-    ↓
-Next.js Dashboard
-    ↓
-Service Manager View
-```
+| Data | Location |
+|------|----------|
+| Audio (MP3, 30-min chunks) | `s3://servicesync-dealership-audio/siltaylor/` |
+| Transcripts (AWS Transcribe JSON) | `s3://servicesync-dealership-audio/transcripts/` |
+| Browser events (gzipped JSONL) | `s3://servicesync-advisor-data/raw-events/chevyland_chevrolet/` |
+| Live PC (Tailscale) | `ssh sil@100.104.185.115` |
 
-## Dashboard Modules
+---
 
-### 1. Live Friction Feed
-```
-Real-time stream of friction events:
-- 2:30 PM: Advisor Horn - "Backorder" detected at Parts Counter
-- 2:28 PM: Tech Smith - "CDK Error" at Bay 3
-- 2:25 PM: Advisor Jones - 5 min dwell time at Parts Counter
-```
+## Stack
 
-### 2. Physical Movement Heatmap
-```
-Visual heatmap showing:
-- High traffic areas (red)
-- Low traffic areas (green)
-- "Walking Tax" hotspots
-- Dwell time by location
-```
+- **Next.js 14** (App Router) + **TypeScript** + **Tailwind**
+- **AWS SDK v3** — S3 (read-only) + Transcribe
+- **Recharts** for the usage chart
+- Deployed to **Vercel**
 
-### 3. Advisor Productivity
-```
-Metrics per advisor:
-- ROs completed today
-- Average RO time
-- Friction events encountered
-- Walking time vs. desk time
-- Customer satisfaction score
-```
+All S3 access is **read-only** — the dashboard never mutates the pilot buckets.
+The only write-side action is starting AWS Transcribe jobs.
 
-### 4. AI Insights
-```
-Automated recommendations:
-- "Parts Counter is a bottleneck (12 visits/hour)"
-- "Advisor Horn spends 30% of time walking"
-- "CDK errors spike at 2 PM daily"
-- "Recommend: Add parts runner position"
-```
+---
 
-## Tech Stack
+## Local setup
 
-- **Next.js 14** - React framework
-- **TypeScript** - Type safety
-- **Supabase** - Real-time database
-- **Recharts** - Data visualization
-- **Tailwind CSS** - Styling
-- **Vercel** - Deployment
-
-## Installation
-
-### Development
 ```bash
-# Clone this repo
-git clone https://github.com/ServiceSync-AI/ServiceSync-Dashboard.git
-cd ServiceSync-Dashboard
-
-# Install dependencies
+cd dashboard
+cp .env.local.example .env.local   # fill in AWS creds + DASHBOARD_PASSWORD
 npm install
-
-# Configure environment
-cp .env.example .env.local
-# Edit .env.local with Supabase credentials
-
-# Run development server
-npm run dev
-
-# Open http://localhost:3000
+npm run dev                        # http://localhost:3000
 ```
 
-### Production
-```bash
-# Build for production
-npm run build
+### Environment variables
 
-# Deploy to Vercel
-vercel deploy
-```
+See `.env.local.example`. Key ones:
 
-## Configuration
+| Var | Purpose |
+|-----|---------|
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` | Read access to the two buckets + Transcribe |
+| `AUDIO_BUCKET` / `EVENTS_BUCKET` | Bucket names |
+| `AUDIO_PREFIX` / `TRANSCRIPTS_PREFIX` / `EVENTS_PREFIX` | Key prefixes (defaults match the pilot) |
+| `DEALER_PC_IP` / `SSH_USER` / `SSH_KEY_PATH` | Live-page SSH actions over Tailscale |
+| `DASHBOARD_PASSWORD` | Single shared password for the gate |
 
-```env
-# .env.local
-NEXT_PUBLIC_SUPABASE_URL=https://your-supabase-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-```
+---
 
-## Development Status
+## Auth
 
-🟢 **MEDIUM PRIORITY** - Needed for Q2 SaaS launch
+A single shared password (`DASHBOARD_PASSWORD`). `middleware.ts` redirects any
+unauthenticated request to `/login`; `/api/auth` sets an httpOnly cookie holding
+`sha256(password)`. If `DASHBOARD_PASSWORD` is unset, the gate fails open (dev
+convenience) — **always set it in production.**
 
-### Phase 1: MVP (Q2)
-- [ ] Build Next.js app scaffold
-- [ ] Connect to Supabase
-- [ ] Add real-time subscriptions
-- [ ] Build friction feed module
-- [ ] Build heatmap visualization
+---
 
-### Phase 2: Intelligence (Q2)
-- [ ] Add advisor productivity metrics
-- [ ] Integrate AI insights
-- [ ] Build friction report generator
-- [ ] Add export functionality
+## API routes
 
-### Phase 3: SaaS Launch (Q3)
-- [ ] Add user authentication
-- [ ] Multi-dealership support
-- [ ] Custom branding
-- [ ] Mobile responsive design
+| Method + Route | Returns |
+|----------------|---------|
+| `GET /api/audio/list` | `AudioFile[]` (with `hasTranscript`) |
+| `GET /api/audio/stream?key=` | 302 → presigned S3 URL (range/seek works) |
+| `GET /api/transcripts/list` | `TranscriptListEntry[]` |
+| `GET /api/transcripts/[id]` | `Transcript` (`id` = base64url of the S3 key) |
+| `GET /api/events?date=YYYY-MM-DD` | `BrowserEvent[]` for that UTC day |
+| `GET /api/events/summary?days=N` | `EventsSummary` (capped at 30 days) |
+| `GET /api/status` | `SystemStatus` (TCP ping + S3 freshness) |
+| `POST /api/transcribe` `{audioKey}` | `{jobName, status}` (`GET ?job=` polls) |
+| `POST /api/live/action` `{action}` | `{ok, stdout, stderr}` (fixed allow-list only) |
+| `POST/DELETE /api/auth` | set / clear the auth cookie |
 
-## Data Sources
+---
 
-### Supabase Tables
-- `friction_events` - Real-time friction detection
-- `beacon_locations` - Physical movement data
-- `transcription_results` - Audio transcripts
-- `advisor_metrics` - Productivity calculations
-- `ai_insights` - Generated recommendations
+## How analysis works
 
-### Real-Time Subscriptions
-```typescript
-const subscription = supabase
-  .channel('friction_events')
-  .on('postgres_changes', 
-    { event: 'INSERT', schema: 'public', table: 'friction_events' },
-    (payload) => {
-      // Update dashboard in real-time
-    }
-  )
-  .subscribe()
-```
+`lib/analyze.ts` is pure (events in → derived data out), so it runs in both API
+routes and client components:
 
-## Example Dashboard View
+- **System classification** — maps each event to ASR Pro / Global Connect /
+  ProDemand / DMS / Other / Distraction from the `system` field or URL/title.
+- **Sessions** — splits the stream on idle gaps > 5 min.
+- **Friction** — rapid-switch bursts (3+ systems in < 2 min), high switch rate,
+  ProDemand lookups, distraction time, idle.
+- **Transcript highlights** — keyword scan for complaints, hold time, declined
+  work, advisor frustration, upsells.
 
-```
-┌─────────────────────────────────────────────────────┐
-│ ServiceSync Dashboard - Shreveport Toyota          │
-├─────────────────────────────────────────────────────┤
-│                                                     │
-│ 🔴 LIVE FRICTION FEED                              │
-│ ├─ 2:30 PM: Advisor Horn - Backorder at Parts     │
-│ ├─ 2:28 PM: Tech Smith - CDK Error at Bay 3       │
-│ └─ 2:25 PM: Advisor Jones - 5 min at Parts        │
-│                                                     │
-│ 🗺️ PHYSICAL HEATMAP                                │
-│ [Visual heatmap showing movement patterns]         │
-│                                                     │
-│ 📊 ADVISOR PRODUCTIVITY                            │
-│ ├─ Horn: 8 ROs, 45 min avg, 3 friction events     │
-│ ├─ Jones: 6 ROs, 52 min avg, 5 friction events    │
-│ └─ Smith: 7 ROs, 48 min avg, 2 friction events    │
-│                                                     │
-│ 💡 AI INSIGHTS                                     │
-│ ├─ Parts Counter bottleneck (12 visits/hour)      │
-│ ├─ CDK errors spike at 2 PM daily                 │
-│ └─ Recommend: Add parts runner position           │
-│                                                     │
-└─────────────────────────────────────────────────────┘
-```
+> Insights are **heuristic decision-support**, clearly labeled as such — not a
+> model verdict.
 
-## Related Repositories
+---
 
-- [ServiceSync-Intelligence-Engine](https://github.com/ServiceSync-AI/ServiceSync-Data-Pipeline) - Core data processing
-- [ServiceSync-Pipe](https://github.com/ServiceSync-AI/ServiceSync-Pipe) - Screenpipe plugin
-- [ServiceSync-ShopSense](https://github.com/ServiceSync-AI/ServiceSync-ShopSense) - BLE beacon tracking
-- [ServiceSync-Sidekick](https://github.com/ServiceSync-AI/ServiceSync-Sidekick) - Chrome extension
+## Deploy (Vercel)
 
-## License
+1. Connect the repo, set **root directory** to `dashboard/`.
+2. Add all env vars from `.env.local.example`.
+3. Domain: `intel.servicesync.ai` (or `pilot.servicesync.ai`).
 
-MIT
+⚠️ **SSH quick actions on `/live` require the deploy private key on the host.**
+Vercel's serverless filesystem won't have your `~/.ssh` key, and Tailscale isn't
+reachable from Vercel — so the live SSH actions are intended for **local /
+self-hosted** runs. On Vercel, the read-only S3 pages all work; the SSH actions
+will report unreachable.
 
-## Contact
+---
 
-Frazier Horn - frazier@servicesync.io
+## Known limitations / follow-ups
+
+- **Cross-transcript search** — transcript search is currently within a single
+  selected transcript. A bucket-wide full-text search is a follow-up (would need
+  an index or on-demand fan-out fetch).
+- **Summary window anchoring** — `/api/events/summary` uses a now-based window;
+  if capture pauses, widen `days` to see older data.
+- **RO-level metrics** — RO counts/timing in the audit preview are derived from
+  activity signals, not a DMS integration yet.

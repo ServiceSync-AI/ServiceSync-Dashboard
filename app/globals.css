@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Global styles — Pilot Intelligence Dashboard
+ * Dark-only, dense, terminal-flavored. Base layer sets the canvas + scrollbars;
+ * the component layer holds the handful of reusable primitives (cards, badges,
+ * data tables) that show up on nearly every page.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: #0d1117;
+  color: #e6edf3;
+}
+
+body {
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin terminal-style scrollbars. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 6px;
+  border: 2px solid #0d1117;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-border bg-surface p-4;
+  }
+  .card-hover {
+    @apply transition-colors hover:border-muted/60;
+  }
+  .stat-label {
+    @apply text-2xs font-medium uppercase tracking-wider text-muted;
+  }
+  .stat-value {
+    @apply font-mono text-2xl font-semibold text-fg;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium;
+  }
+  .dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+  /* Dense data tables used across audio/activity views. */
+  .data-table {
+    @apply w-full border-collapse text-left text-xs;
+  }
+  .data-table th {
+    @apply sticky top-0 z-10 bg-surface-2 px-3 py-2 text-2xs font-semibold uppercase tracking-wider text-muted;
+  }
+  .data-table td {
+    @apply border-t border-border px-3 py-2 font-mono;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-surface-2/60;
+  }
+}
