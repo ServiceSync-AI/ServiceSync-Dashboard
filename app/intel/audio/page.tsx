@@ -1,9 +1,9 @@
 /**
- * Audio Explorer (/audio) — player + transcript viewer
+ * Audio Explorer (/intel/audio) — player + transcript viewer
  * ====================================================
- * Lists recordings from /api/audio/list, plays the selected one (streamed via
- * /api/audio/stream → presigned S3), and shows its transcript alongside when
- * one exists. Clicking a transcript line seeks the audio. If no transcript
+ * Lists recordings from /api/intel/audio/list, plays the selected one (streamed
+ * via /api/intel/audio/stream → presigned S3), and shows its transcript alongside
+ * when one exists. Clicking a transcript line seeks the audio. If no transcript
  * exists, a one-click button kicks off an AWS Transcribe job.
  */
 'use client';
@@ -54,7 +54,7 @@ export default function AudioPage() {
     if (file.hasTranscript && file.transcriptKey) {
       setLoadingTranscript(true);
       try {
-        const res = await fetch(`/api/transcripts/${file.transcriptKey}`);
+        const res = await fetch(`/api/intel/transcripts/${file.transcriptKey}`);
         if (res.ok) setTranscript(await res.json());
       } catch {
         /* leave transcript null; viewer shows the empty state */
@@ -149,7 +149,7 @@ export default function AudioPage() {
           <div className="space-y-3">
             <AudioPlayer
               ref={playerRef}
-              src={selected ? `/api/audio/stream?key=${encodeURIComponent(selected.key)}` : null}
+              src={selected ? `/api/intel/audio/stream?key=${encodeURIComponent(selected.key)}` : null}
               label={selected?.name}
               onTime={setCurrentTime}
             />

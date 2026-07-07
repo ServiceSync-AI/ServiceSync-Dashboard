@@ -33,8 +33,18 @@ export async function middleware(request: NextRequest) {
   }
 
   const password = process.env.DASHBOARD_PASSWORD ?? '';
-  // If no password is configured, fail open in dev rather than locking out.
-  if (!password) return NextResponse.next();
+  // No password configured: fail OPEN in dev (convenience), fail CLOSED in
+  // production (a missing env var must never expose the dashboard publicly).
+  // NOTE: DASHBOARD_PASSWORD MUST be set on the production host, or the
+  // dashboard is intentionally inaccessible.
+  if (!password) {
+    if (process.env.NODE_ENV === 'production') {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('next', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    return NextResponse.next();
+  }
 
   const expected = await sha256Hex(password);
   const token = request.cookies.get('ss_auth')?.value;
