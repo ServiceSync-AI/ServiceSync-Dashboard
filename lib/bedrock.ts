@@ -31,7 +31,7 @@ function bedrock(): BedrockRuntimeClient {
 
 export const MODELS = {
   haiku: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
-  sonnet: 'us.anthropic.claude-sonnet-5',
+  sonnet: 'us.anthropic.claude-sonnet-4-6',
   opus: 'us.anthropic.claude-opus-4-8',
 } as const;
 
