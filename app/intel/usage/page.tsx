@@ -14,6 +14,7 @@
  * this page is strictly per-advisor assistant traffic.
  */
 import { getUsageReport, type AdvisorUsage, type UsageReport } from '@/lib/usage';
+import { getCloudSpendMTD, type CloudSpendMTD } from '@/lib/awscost';
 import { clockUTC } from '@/lib/format';
 
 export const runtime = 'nodejs';
@@ -68,6 +69,62 @@ function UsageTable({
   );
 }
 
+/**
+ * Owner-side cloud spend for the current month, read from AWS Cost Explorer.
+ * Additive to the per-advisor view: this is the dashboard's own AWS bill, not
+ * attributable to any single advisor.
+ */
+function CloudSpendCard({ spend }: { spend: CloudSpendMTD }) {
+  if (!spend.available) {
+    return (
+      <div className="card mb-5 border-l-2 border-l-border text-xs leading-relaxed text-fg/90">
+        <span className="stat-label">Cloud spend — month to date</span>
+        <p className="mt-2 text-muted">
+          Cloud cost unavailable — the dashboard&apos;s AWS identity needs{' '}
+          <span className="font-mono text-cyan">ce:GetCostAndUsage</span>.
+        </p>
+        <p className="mt-2 font-mono text-2xs text-muted">{spend.error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card mb-5 border-l-2 border-l-cyan">
+      <span className="stat-label">Cloud spend — month to date</span>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+        <span className="font-display text-3xl font-bold text-cyan">{usd(spend.totalUsd)}</span>
+        <span className="text-2xs text-muted">
+          {spend.month} · AWS UnblendedCost · top {spend.byService.length} service
+          {spend.byService.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      <p className="mt-2 text-2xs text-muted">
+        AWS credits may mask real spend — figures can read ~$0 until credits are exhausted.
+      </p>
+      {spend.byService.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th className="text-right">$ MTD</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spend.byService.map((s) => (
+                <tr key={s.service}>
+                  <td className="text-fg">{s.service}</td>
+                  <td className="text-right text-cyan">{usd(s.usd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default async function UsagePage() {
   let data: UsageReport | null = null;
   let error: string | null = null;
@@ -76,6 +133,8 @@ export default async function UsagePage() {
   } catch (err) {
     error = String((err as Error).message);
   }
+
+  const cloudSpend = await getCloudSpendMTD();
 
   const generatedAt = data ? clockUTC(data.generatedAt) : clockUTC(new Date().toISOString());
   const showCost = data?.hasCostData ?? false;
@@ -89,6 +148,9 @@ export default async function UsagePage() {
           {data ? ` · ${data.rowCount} daily rows` : ''}
         </p>
       </header>
+
+      {/* Owner-side AWS cloud spend (MTD) — additive, independent of per-advisor data. */}
+      <CloudSpendCard spend={cloudSpend} />
 
       {error ? (
         <div className="card border-l-2 border-l-danger">
