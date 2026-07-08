@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: '/intel/audio', label: 'Audio', icon: '🎙️', description: 'Recordings & transcripts' },
   { href: '/intel/activity', label: 'Activity', icon: '📈', description: 'Session timeline' },
   { href: '/intel/insights', label: 'Insights', icon: '💡', description: 'Daily summary' },
+  { href: '/intel/recovery', label: 'Recovery', icon: '💵', description: 'Declined work' },
   { href: '/intel/live', label: 'Live', icon: '⚡', description: 'Remote actions' },
   { href: '/console', label: 'Repair Board', icon: '🔧', description: 'Advisor console' },
   { href: '/tracker', label: 'Tracker', icon: '🚗', description: 'Customer status' },

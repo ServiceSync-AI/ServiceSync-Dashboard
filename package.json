@@ -2,7 +2,7 @@
   "name": "servicesync-pilot-dashboard",
   "version": "0.1.0",
   "private": true,
-  "description": "ServiceSync AI \u2014 Pilot Intelligence Dashboard. Internal founder tool for monitoring captured dealership data (audio, transcripts, browser activity).",
+  "description": "ServiceSync AI — Pilot Intelligence Dashboard. Internal founder tool for monitoring captured dealership data (audio, transcripts, browser activity).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,16 +10,17 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1073.0",
+    "@aws-sdk/client-dynamodb": "^3.679.0",
     "@aws-sdk/client-s3": "^3.620.0",
     "@aws-sdk/client-transcribe": "^3.620.0",
+    "@aws-sdk/lib-dynamodb": "^3.679.0",
     "@aws-sdk/s3-request-presigner": "^3.620.0",
+    "canvas-confetti": "^1.9.3",
     "next": "^14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.12.7",
-    "@aws-sdk/client-dynamodb": "^3.679.0",
-    "@aws-sdk/lib-dynamodb": "^3.679.0",
-    "canvas-confetti": "^1.9.3",
     "twilio": "^5.3.3"
   },
   "devDependencies": {

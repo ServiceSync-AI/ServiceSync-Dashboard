@@ -3,6 +3,21 @@
 All notable changes to the `dashboard/` app. Scoped to this directory to keep
 the PR self-contained.
 
+## [Unreleased]
+
+### Added
+- **Declined Work Recovery** (`/intel/recovery`) — the flagship product signal. A Claude (Bedrock, Sonnet 5) pass over the most recent transcripts extracts declined/deferred work as structured items: recommended job, estimated $ value, urgency (safety/maintenance/cosmetic), whether a follow-up was logged, and a verbatim quote. A "Recoverable" hero sums the dollars on items with no logged follow-up — the recovery opportunity. Items sorted safety-first then by value.
+  - `lib/bedrock.ts` — IAM-native Bedrock client (`invokeClaude`) + tolerant JSON extraction. Models: Haiku/Sonnet 5/Opus profiles.
+  - `lib/recovery.ts` — robust transcript-text reader (handles the Whisper flat `{transcript}` shape **and** AWS Transcribe JSON), the detection prompt, and a 30-min in-memory result cache so refreshes don't re-bill the model.
+  - `app/api/intel/recovery/route.ts` — `GET` (with `?refresh=1`) returning `RecoveryResult`.
+  - `app/intel/recovery/page.tsx` + Sidebar "Recovery" tab.
+  - `magenta` (+ `violet`) brand token added to `tailwind.config.ts` (closes the missing-magenta gap in the brand spec).
+  - **Deploy note:** adds the `@aws-sdk/client-bedrock-runtime` dependency (run `npm install` on deploy), and the dashboard's AWS identity needs `bedrock:InvokeModel` on the Claude inference profiles.
+- New dependency: `@aws-sdk/client-bedrock-runtime`.
+
+### Fixed
+- `CLAUDE.md` rewritten — it described a pre-build Supabase/n8n/Vercel plan that never shipped; the app is a built Next.js 14 + AWS (S3/Transcribe/DynamoDB/Bedrock) dashboard.
+
 ## [0.1.0] — 2026-06-19
 
 ### Added

@@ -17,6 +17,7 @@ no database in v1.
 | **Audio** | `/audio` | Recording list, in-browser player (streamed from S3), transcript viewer with click-to-seek, full-text search within a transcript, one-click AWS Transcribe |
 | **Activity** | `/activity` | 24h session timeline, time-per-system chart, context-switch heatmap, session list, rapid-switch friction flags |
 | **Insights** | `/insights` | Daily summary, top friction patterns, transcript keyword highlights, recommendations, dealer-ready audit preview |
+| **Recovery** | `/intel/recovery` | **Declined Work Recovery** — Claude (Bedrock) pass over recent transcripts: declined/deferred jobs, estimated $ on the table, follow-up-logged flag, customer's own words |
 | **Live** | `/live` | 30s-polling health, SSH quick actions (ffmpeg/disk/latest-audio/Chrome), trigger transcript for latest file |
 
 ---
