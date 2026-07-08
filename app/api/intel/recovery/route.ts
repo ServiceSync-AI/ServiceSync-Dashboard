@@ -2,7 +2,8 @@
  * GET /api/intel/recovery — Declined Work Recovery analysis
  * =========================================================
  * Runs (or returns cached) Claude-powered detection of declined/deferred work
- * across the most recent transcripts. `?refresh=1` forces a recompute.
+ * across the most recent transcripts. `?refresh=1` forces a recompute; an
+ * optional `?day=YYYY-MM-DD` scopes the pass to a specific UTC day.
  *
  * Returns: RecoveryResult
  */
@@ -16,9 +17,13 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const force = new URL(req.url).searchParams.get('refresh') === '1';
+    const params = new URL(req.url).searchParams;
+    const force = params.get('refresh') === '1';
+    const dayParam = params.get('day')?.trim();
+    // Only accept a well-formed calendar day; anything else falls back to recent.
+    const day = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : undefined;
     const advisorId = resolveAdvisorId(cookies().get('ss_advisor')?.value);
-    const result = await getRecovery(advisorId, force);
+    const result = await getRecovery(advisorId, day, force);
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
     });
