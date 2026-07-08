@@ -10,6 +10,7 @@
  * with the customer's own words. Results are cached in-memory with a TTL so a
  * page refresh doesn't re-bill the model on every load.
  */
+import type { _Object } from '@aws-sdk/client-s3';
 import { listAll, getObjectText } from './s3';
 import { config } from './config';
 import { invokeClaude, parseJsonBlock } from './bedrock';
@@ -33,11 +34,29 @@ export interface RecoveryResult {
   transcriptsScanned: number;
   model: string;
   generatedAt: string;
+  /** The UTC day analyzed (YYYY-MM-DD) when date-scoped, else null = most-recent mode. */
+  day: string | null;
 }
 
 const MAX_TRANSCRIPTS = 12; // bound cost/latency of the model pass
-const MIN_WORDS = 15; // skip empty/near-silent transcripts (e.g. ". .")
+// Over-fetch pool for most-recent mode: the live drive produces many short
+// test/ambient clips, so grabbing exactly the newest 12 gets crowded out by junk
+// and the page reads empty. We pull a wider pool, filter, then keep the newest 12
+// real conversations.
+const RECENT_POOL = 60;
+// A single busy day can hold many recordings — cap the day-scoped pass so a heavy
+// day can't blow up model cost/latency (newest-first, so we keep the latest work).
+const DAY_MAX_TRANSCRIPTS = 40;
+const MIN_WORDS = 15; // hard floor: skip empty/near-silent transcripts (e.g. ". .")
+// Ambient floor: transcripts above MIN_WORDS but below this are almost always
+// desk noise / a mic left open, not a service-advisor conversation. Kept low so a
+// genuinely brief exchange isn't dropped.
+const SIGNAL_MIN_WORDS = 25;
 const CACHE_TTL_MS = 30 * 60_000; // 30 min — recovery data doesn't change fast
+
+// Filenames that betray a test rig or non-work capture. Conservative on purpose:
+// only strong signals, so a real conversation is never dropped by its name.
+const JUNK_KEY_RE = /(?:test|gaming|sample|demo|ambient|mic[-_ ]?check|silence)/i;
 
 // Cache keyed by advisor so switching the selector doesn't serve stale results
 // from another advisor. Default (no advisor) uses the config.advisorId key.
@@ -76,32 +95,78 @@ export function transcriptText(raw: string): string {
   return '';
 }
 
-async function loadRecentTranscripts(prefix: string, limit = MAX_TRANSCRIPTS) {
-  const objs = await listAll(config.audioBucket, prefix);
-  const recent = objs
-    .filter((o) => o.Key && /\.json$/i.test(o.Key))
-    .sort(
-      (a, b) =>
-        (b.LastModified ?? new Date(0)).getTime() -
-        (a.LastModified ?? new Date(0)).getTime(),
-    )
-    .slice(0, limit);
+/** UTC calendar day (YYYY-MM-DD) of an S3 object's LastModified. */
+function utcDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
 
-  const out: { id: string; text: string }[] = [];
+/** True when a key looks like a test/ambient rig rather than a real capture. */
+function looksLikeJunkKey(key: string): boolean {
+  const name = key.split('/').pop() ?? key;
+  return JUNK_KEY_RE.test(name);
+}
+
+/**
+ * True when transcript text carries enough signal to be a real conversation.
+ * Drops empties (< MIN_WORDS) and ambient/noise clips (< SIGNAL_MIN_WORDS), plus
+ * degenerate clips that are one token repeated (e.g. "test test test").
+ */
+function hasSignal(text: string): boolean {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length < MIN_WORDS || words.length < SIGNAL_MIN_WORDS) return false;
+  const unique = new Set(words.map((w) => w.toLowerCase())).size;
+  return unique >= 12;
+}
+
+/**
+ * Load transcripts for the model pass, filtering junk before analysis.
+ *
+ * Two selection modes:
+ *   - day (YYYY-MM-DD): every transcript whose S3 LastModified falls on that UTC
+ *     day (mirrors the audit lambda), newest first, capped at DAY_MAX_TRANSCRIPTS.
+ *   - default: the most-recent real conversations — pulled from a wider pool so
+ *     the flood of short test/ambient clips can't crowd them out (the old bug).
+ *
+ * Junk is dropped in two cheap passes: by filename (test/gaming/ambient) before
+ * we spend an S3 read, then by content signal after reading.
+ */
+async function loadTranscripts(
+  prefix: string,
+  opts: { day?: string } = {},
+): Promise<{ id: string; text: string }[]> {
+  const { day } = opts;
+  const jsons = (await listAll(config.audioBucket, prefix))
+    .filter((o) => o.Key && /\.json$/i.test(o.Key))
+    // Drop obvious test/ambient rigs by name before spending reads on them.
+    .filter((o) => !looksLikeJunkKey(o.Key!));
+
+  const byNewest = (a: _Object, b: _Object) =>
+    (b.LastModified?.getTime() ?? 0) - (a.LastModified?.getTime() ?? 0);
+
+  const candidates: _Object[] = day
+    ? jsons
+        .filter((o) => o.LastModified && utcDay(o.LastModified) === day)
+        .sort(byNewest)
+        .slice(0, DAY_MAX_TRANSCRIPTS)
+    : jsons.sort(byNewest).slice(0, RECENT_POOL);
+
+  const loaded: { id: string; text: string; at: number }[] = [];
   await Promise.all(
-    recent.map(async (o) => {
+    candidates.map(async (o) => {
       try {
         const text = transcriptText(await getObjectText(config.audioBucket, o.Key!));
-        if (text.trim().split(/\s+/).length >= MIN_WORDS) {
-          const id = (o.Key!.split('/').pop() ?? o.Key!).replace(/\.json$/i, '');
-          out.push({ id, text });
-        }
+        if (!hasSignal(text)) return;
+        const id = (o.Key!.split('/').pop() ?? o.Key!).replace(/\.json$/i, '');
+        loaded.push({ id, text, at: o.LastModified?.getTime() ?? 0 });
       } catch {
         /* skip unreadable transcript */
       }
     }),
   );
-  return out;
+
+  // Newest first, then bound the number of model calls.
+  loaded.sort((a, b) => b.at - a.at);
+  return loaded.slice(0, MAX_TRANSCRIPTS).map(({ id, text }) => ({ id, text }));
 }
 
 const SYSTEM_PROMPT = `You are a service-drive analyst for an automotive dealership. You read raw service-advisor conversation transcripts (which may be messy, multi-speaker, and lack punctuation) and identify DECLINED or DEFERRED work: any recommended service or repair the customer did NOT approve today.
@@ -120,12 +185,20 @@ Rules:
 - If nothing was declined, return an empty array.
 - Return ONLY a JSON array, no prose, no markdown fences.`;
 
-/** Run the Claude pass over the recent transcripts and aggregate. */
-async function detectDeclinedWork(advisorId?: string): Promise<RecoveryResult> {
-  const transcripts = await loadRecentTranscripts(transcriptsPrefixForAdvisor(advisorId));
+/** Run the Claude pass over the selected transcripts and aggregate. */
+async function detectDeclinedWork(advisorId?: string, day?: string): Promise<RecoveryResult> {
+  const transcripts = await loadTranscripts(transcriptsPrefixForAdvisor(advisorId), { day });
   const generatedAt = new Date().toISOString();
+  const dayLabel = day ?? null;
   if (transcripts.length === 0) {
-    return { items: [], totalDollars: 0, transcriptsScanned: 0, model: MODEL_LABEL, generatedAt };
+    return {
+      items: [],
+      totalDollars: 0,
+      transcriptsScanned: 0,
+      model: MODEL_LABEL,
+      generatedAt,
+      day: dayLabel,
+    };
   }
 
   const items: DeclinedItem[] = [];
@@ -177,7 +250,14 @@ async function detectDeclinedWork(advisorId?: string): Promise<RecoveryResult> {
   });
 
   const totalDollars = items.reduce((s, i) => s + (i.estDollars ?? 0), 0);
-  return { items, totalDollars, transcriptsScanned: transcripts.length, model: MODEL_LABEL, generatedAt };
+  return {
+    items,
+    totalDollars,
+    transcriptsScanned: transcripts.length,
+    model: MODEL_LABEL,
+    generatedAt,
+    day: dayLabel,
+  };
 }
 
 const MODEL_LABEL = 'claude-sonnet-4-6 (Bedrock)';
@@ -190,14 +270,24 @@ const MODEL_LABEL = 'claude-sonnet-4-6 (Bedrock)';
  * transcriptsPrefixForAdvisor) and keys the cache so switching advisors never
  * serves another advisor's cached result. Omitting it preserves the original
  * single-advisor behavior (config.advisorId).
+ *
+ * `day` (YYYY-MM-DD) scopes the pass to a specific UTC day; omit it for the
+ * default most-recent behavior. The day is part of the cache key so switching
+ * dates never serves the wrong day's result.
  */
-export async function getRecovery(advisorId?: string, force = false): Promise<RecoveryResult> {
-  const key = advisorId?.trim() || config.advisorId;
+export async function getRecovery(
+  advisorId?: string,
+  day?: string,
+  force = false,
+): Promise<RecoveryResult> {
+  const advisor = advisorId?.trim() || config.advisorId;
+  const dayKey = day?.trim() || '';
+  const key = `${advisor}::${dayKey || 'recent'}`;
   const hit = cache.get(key);
   if (!force && hit && Date.now() - hit.at < CACHE_TTL_MS) {
     return hit.result;
   }
-  const result = await detectDeclinedWork(key);
+  const result = await detectDeclinedWork(advisor, dayKey || undefined);
   cache.set(key, { at: Date.now(), result });
   return result;
 }
