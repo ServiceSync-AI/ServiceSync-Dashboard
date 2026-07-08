@@ -35,3 +35,6 @@ coverage/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# also ignore a stray node_modules symlink (not just the dir)
+node_modules
