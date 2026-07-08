@@ -7,7 +7,9 @@
  * Returns: RecoveryResult
  */
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getRecovery } from '@/lib/recovery';
+import { resolveAdvisorId } from '@/lib/advisors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,7 +17,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
     const force = new URL(req.url).searchParams.get('refresh') === '1';
-    const result = await getRecovery(force);
+    const advisorId = resolveAdvisorId(cookies().get('ss_advisor')?.value);
+    const result = await getRecovery(advisorId, force);
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
     });

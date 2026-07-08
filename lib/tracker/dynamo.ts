@@ -38,7 +38,7 @@ const TABLES = {
 // provider chain picks up the Lambda execution role in prod and the local
 // profile/env in dev. Region falls back to us-east-1 to match the rest of the stack.
 let docClient: DynamoDBDocumentClient | null = null;
-function getDoc(): DynamoDBDocumentClient {
+export function getDoc(): DynamoDBDocumentClient {
   if (docClient) return docClient;
   const base = new DynamoDBClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
   // removeUndefinedValues lets us pass optional fields as undefined without errors.

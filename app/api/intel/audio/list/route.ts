@@ -31,6 +31,9 @@ function recordingTime(name: string): string {
 
 export async function GET() {
   try {
+    // TODO(multi-advisor): honor the ss_advisor cookie and scope audioPrefix /
+    // transcriptsPrefix to the selected advisor (see lib/advisors.ts and the
+    // /intel/recovery wiring). Single-advisor (siltaylor) for now.
     const [audioObjs, transcriptObjs] = await Promise.all([
       listAll(config.audioBucket, config.audioPrefix),
       listAll(config.audioBucket, config.transcriptsPrefix),

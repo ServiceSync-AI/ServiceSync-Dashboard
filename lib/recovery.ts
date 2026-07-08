@@ -39,7 +39,24 @@ const MAX_TRANSCRIPTS = 12; // bound cost/latency of the model pass
 const MIN_WORDS = 15; // skip empty/near-silent transcripts (e.g. ". .")
 const CACHE_TTL_MS = 30 * 60_000; // 30 min — recovery data doesn't change fast
 
-let cache: { at: number; result: RecoveryResult } | null = null;
+// Cache keyed by advisor so switching the selector doesn't serve stale results
+// from another advisor. Default (no advisor) uses the config.advisorId key.
+const cache = new Map<string, { at: number; result: RecoveryResult }>();
+
+/**
+ * Resolve the S3 transcript prefix for a given advisor.
+ *
+ * Multi-advisor seam (best-effort): the live pilot stores ALL transcripts under
+ * a single `config.transcriptsPrefix`, so today every advisor maps to that same
+ * prefix — behavior is unchanged. Once transcripts are written under a
+ * per-advisor prefix, switch on `advisorId` here and the rest of the recovery
+ * pipeline scopes automatically.
+ * TODO(multi-advisor): return a per-advisor prefix (e.g. `${advisorId}/transcripts/`)
+ * once the capture pipeline partitions transcripts by advisor.
+ */
+export function transcriptsPrefixForAdvisor(_advisorId?: string): string {
+  return config.transcriptsPrefix;
+}
 
 /**
  * Pull transcript text from either the Whisper Lambda shape ({ transcript })
@@ -59,8 +76,8 @@ export function transcriptText(raw: string): string {
   return '';
 }
 
-async function loadRecentTranscripts(limit = MAX_TRANSCRIPTS) {
-  const objs = await listAll(config.audioBucket, config.transcriptsPrefix);
+async function loadRecentTranscripts(prefix: string, limit = MAX_TRANSCRIPTS) {
+  const objs = await listAll(config.audioBucket, prefix);
   const recent = objs
     .filter((o) => o.Key && /\.json$/i.test(o.Key))
     .sort(
@@ -104,8 +121,8 @@ Rules:
 - Return ONLY a JSON array, no prose, no markdown fences.`;
 
 /** Run the Claude pass over the recent transcripts and aggregate. */
-async function detectDeclinedWork(): Promise<RecoveryResult> {
-  const transcripts = await loadRecentTranscripts();
+async function detectDeclinedWork(advisorId?: string): Promise<RecoveryResult> {
+  const transcripts = await loadRecentTranscripts(transcriptsPrefixForAdvisor(advisorId));
   const generatedAt = new Date().toISOString();
   if (transcripts.length === 0) {
     return { items: [], totalDollars: 0, transcriptsScanned: 0, model: MODEL_LABEL, generatedAt };
@@ -158,12 +175,19 @@ const MODEL_LABEL = 'claude-sonnet-5 (Bedrock)';
 /**
  * Cached entry point. Returns the last result within the TTL to avoid
  * re-billing the model on every page load; pass force=true to recompute.
+ *
+ * `advisorId` scopes the transcript source (best-effort — see
+ * transcriptsPrefixForAdvisor) and keys the cache so switching advisors never
+ * serves another advisor's cached result. Omitting it preserves the original
+ * single-advisor behavior (config.advisorId).
  */
-export async function getRecovery(force = false): Promise<RecoveryResult> {
-  if (!force && cache && Date.now() - cache.at < CACHE_TTL_MS) {
-    return cache.result;
+export async function getRecovery(advisorId?: string, force = false): Promise<RecoveryResult> {
+  const key = advisorId?.trim() || config.advisorId;
+  const hit = cache.get(key);
+  if (!force && hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    return hit.result;
   }
-  const result = await detectDeclinedWork();
-  cache = { at: Date.now(), result };
+  const result = await detectDeclinedWork(key);
+  cache.set(key, { at: Date.now(), result });
   return result;
 }

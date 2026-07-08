@@ -10,7 +10,9 @@
  * refresh doesn't re-bill the model. Requires the dashboard's AWS identity to
  * hold bedrock:InvokeModel on the Claude profiles.
  */
+import { cookies } from 'next/headers';
 import { getRecovery, type DeclinedItem, type RecoveryResult } from '@/lib/recovery';
+import { resolveAdvisorId } from '@/lib/advisors';
 import { clockUTC } from '@/lib/format';
 
 export const runtime = 'nodejs';
@@ -29,8 +31,11 @@ const URGENCY_BADGE: Record<DeclinedItem['urgency'], string> = {
 export default async function RecoveryPage() {
   let data: RecoveryResult | null = null;
   let error: string | null = null;
+  // Advisor-aware: scope the recovery pass to the selected advisor (ss_advisor
+  // cookie), falling back to the configured default (siltaylor) when unset.
+  const advisorId = resolveAdvisorId(cookies().get('ss_advisor')?.value);
   try {
-    data = await getRecovery();
+    data = await getRecovery(advisorId);
   } catch (err) {
     error = String((err as Error).message);
   }

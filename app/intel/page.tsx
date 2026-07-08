@@ -25,6 +25,9 @@ const EVENT_FRESH_MS = 30 * 60 * 1000;
 
 async function gather() {
   const today = todayUTC();
+  // TODO(multi-advisor): honor the ss_advisor cookie and scope the audio /
+  // transcript / event prefixes to the selected advisor (see lib/advisors.ts
+  // and the /intel/recovery advisor-aware wiring). Single-advisor today.
   const [reachable, audioObjs, transcriptObjs, eventObjs, lastEvent, todayEvents] =
     await Promise.all([
       pcReachable(),
