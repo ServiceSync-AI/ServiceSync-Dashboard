@@ -94,6 +94,56 @@ interface TranscribeJson {
   };
 }
 
+/**
+ * Flat shape written by the Whisper transcription Lambda (the live pilot
+ * source). Unlike AWS Transcribe there are no word/segment timings — just the
+ * full text plus some metadata.
+ */
+interface WhisperJson {
+  transcript?: string;
+  word_count?: number;
+  char_count?: number;
+  duration?: number;
+  duration_sec?: number;
+  filename?: string;
+  model?: string;
+  created_at?: string;
+}
+
+/** Max words per synthetic segment when we have no timings (Whisper). */
+const MAX_WORDS_PER_UNTIMED_SEGMENT = 25;
+
+/**
+ * Split plain text into readable, untimed segments (start/end = 0). We break on
+ * sentence boundaries, further chunking any long sentence into ~25-word windows
+ * so lines stay readable in the viewer. All segments carry zero timestamps —
+ * the viewer treats those as non-seekable.
+ */
+export function segmentsFromText(text: string): TranscriptSegment[] {
+  const clean = text.trim();
+  if (!clean) return [];
+
+  // Split into sentences, keeping trailing punctuation.
+  const sentences = clean.match(/[^.!?]+[.!?]*/g)?.map((s) => s.trim()).filter(Boolean) ?? [clean];
+
+  const segments: TranscriptSegment[] = [];
+  for (const sentence of sentences) {
+    const words = sentence.split(/\s+/).filter(Boolean);
+    if (words.length <= MAX_WORDS_PER_UNTIMED_SEGMENT) {
+      segments.push({ start: 0, end: 0, text: sentence });
+    } else {
+      for (let i = 0; i < words.length; i += MAX_WORDS_PER_UNTIMED_SEGMENT) {
+        segments.push({
+          start: 0,
+          end: 0,
+          text: words.slice(i, i + MAX_WORDS_PER_UNTIMED_SEGMENT).join(' '),
+        });
+      }
+    }
+  }
+  return segments;
+}
+
 /** Group per-word items into readable, timestamped segments. */
 function segmentsFromItems(items: TranscribeItem[]): TranscriptSegment[] {
   const segments: TranscriptSegment[] = [];
@@ -144,7 +194,27 @@ function segmentsFromItems(items: TranscribeItem[]): TranscriptSegment[] {
  *   id:  url-safe identifier for this transcript (carried through to the UI).
  */
 export function parseTranscript(raw: string, id: string): Transcript {
-  const data = JSON.parse(raw) as TranscribeJson;
+  const data = JSON.parse(raw) as TranscribeJson & WhisperJson;
+
+  // Whisper Lambda flat shape (the live pilot source): a string `transcript`
+  // field and no AWS Transcribe `results` block. Detect this FIRST — it has no
+  // word timings, so we build readable, untimed segments from the text.
+  if (typeof data.transcript === 'string' && !data.results) {
+    const text = data.transcript;
+    const segments = segmentsFromText(text);
+    const wordCount =
+      typeof data.word_count === 'number'
+        ? data.word_count
+        : text.split(/\s+/).filter(Boolean).length;
+    const durationSec =
+      typeof data.duration_sec === 'number'
+        ? data.duration_sec
+        : typeof data.duration === 'number'
+          ? data.duration
+          : 0;
+    return { id, text, segments, durationSec, wordCount };
+  }
+
   const fullText = data.results?.transcripts?.[0]?.transcript ?? '';
 
   let segments: TranscriptSegment[];
