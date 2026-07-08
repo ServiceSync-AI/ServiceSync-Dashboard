@@ -6,6 +6,12 @@ the PR self-contained.
 ## [Unreleased]
 
 ### Added
+- **Audits** (`/intel/audits`) — browse and download the nightly branded PDF reports. A nightly Lambda writes one PDF per day to the EVENTS bucket (`servicesync-advisor-data`) under the `audits/` prefix, named `audits/YYYY-MM-DD.pdf`. The page lists every report newest-first (date · size · Download PDF link) and embeds the latest report inline for preview via an `<iframe>` on a presigned URL. Download links are 1-hour presigned URLs minted server-side per request. Degrades gracefully: an empty state ("No audits yet — the nightly job writes one per day (~3am ET).") when the prefix is empty, and an "unavailable" card if the S3 read fails (mirrors the Recovery page).
+  - `lib/audits.ts` — `listAudits()` lists `.pdf` objects under `audits/`, parses the date from the filename, and sorts newest-first; `auditDownloadUrl(key)` presigns a 1-hour GET URL.
+  - `app/api/intel/audits/route.ts` — `GET` returning the audit list with fresh presigned `url`s (Node runtime, force-dynamic, intel-style `Cache-Control`, try/catch → 500).
+  - `app/intel/audits/page.tsx` — server component: inline preview of the latest report + a table of all reports with presigned download links.
+  - `components/Sidebar.tsx` — "Audits" nav item (📄) after Usage & Cost.
+  - **Deploy note:** the dashboard's AWS identity needs S3 read + presign on the `audits/` prefix of `servicesync-advisor-data` (already granted).
 - **Stage 3 sign-in scaffold + design (non-deployed, default-off).** Additive and inert: with no new env vars set, the dashboard behaves exactly as today (shared-password gate). Nothing here is wired into a live deploy.
   - `docs/AUTH_DESIGN.md` — full design: AWS Cognito user pool with per-user logins + a `role` custom attribute (`advisor`/`manager`/`owner`), hosted-UI vs custom login, JWT validation in `middleware.ts`; extension OAuth 2.0 device-authorization + PKCE flow so `advisor_id` becomes *verified* (not self-declared); migration from the shared password + shared `PILOT01` code (`servicesync-advisors` + per-user access codes as interim Stage 2 identity); session/refresh handling; dashboard-first / extension-second rollout; cutover risks.
   - `infra/auth.tf` — Terraform for the Cognito user pool + `advisor`/`manager`/`owner` groups + a `role`/`advisor_id` custom attribute + dashboard (Auth Code + PKCE) and extension (device-grant) app clients + hosted-UI domain. **Clearly headed "NOT APPLIED — review before terraform apply"**; deliberately no `provider`/backend so a stray apply cannot succeed.
