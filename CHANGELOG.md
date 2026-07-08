@@ -6,6 +6,12 @@ the PR self-contained.
 ## [Unreleased]
 
 ### Added
+- **Usage & Cost** (`/intel/usage`) — a per-advisor view of assistant usage and spend. Reads the `servicesync-assistant-usage` DynamoDB table (name from `TABLE_ASSISTANT_USAGE`, PK `advisor_id` / SK `date`), aggregating the last ~30 days into per-advisor messages, in/out tokens, and dollars (today + 30d) with a real-advisor total. Owner/testing traffic (ids starting with `test` or equal to `frazier-testing`) is bucketed separately so it never inflates the totals. Handles both row shapes gracefully: `msg_count` is always present, while `in_tokens`/`out_tokens`/`cost_usd` may be absent on older rows (default to 0). When no row carries cost data yet it degrades to a messages-only view with a "metering populates once the metering backend is deployed" note. The page prominently notes that Recovery + Audit model costs are owner-side (not attributable per advisor) and tracked separately.
+  - `lib/usage.ts` — `getUsageReport()` scans (paginated, bounded to the 30-day window via a `date >= cutoff` filter) using the shared doc client from `lib/tracker/dynamo.ts`; `isTestingAdvisor()` splits the owner/test bucket.
+  - `app/api/intel/usage/route.ts` — `GET` returning `UsageReport` (Node runtime, force-dynamic, intel-style `Cache-Control`, try/catch → 500).
+  - `app/intel/usage/page.tsx` — server component: per-advisor table (advisor · messages · in/out tokens · $ today · $ 30d), a total, the Testing bucket shown separately, and a graceful "unavailable" card if the table read fails (mirrors the Recovery page pattern).
+  - `components/Sidebar.tsx` — "Usage & Cost" nav item (💰) after Recovery.
+  - **Deploy note:** the dashboard's AWS identity needs `dynamodb:Query` + `dynamodb:GetItem` (Scan) on the `servicesync-assistant-usage` table.
 - **Multi-advisor foundation** — the dashboard is no longer hardwired to a single advisor. Additive and non-breaking: everything still defaults to `siltaylor` when no advisor is selected.
   - `lib/advisors.ts` — `listAdvisors()` reads the new `servicesync-advisors` DynamoDB table (name from `TABLE_ADVISORS`, reusing the shared doc client from `lib/tracker/dynamo.ts`), returning `{ advisorId, advisorName, dealership }[]`; falls back to the single `config.advisorId` when the table is empty/unavailable. `resolveAdvisorId(explicit?)` resolves a selection to a valid id or the configured default.
   - `app/api/intel/advisors/route.ts` — `GET` returning the advisor directory (Node runtime, force-dynamic, intel-style `Cache-Control`).
