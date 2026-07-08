@@ -1,13 +1,15 @@
 /**
- * /login — password gate UI
- * ==========================
- * Full-screen overlay (fixed inset-0) so it covers the sidebar shell from the
- * root layout. Posts the password to /api/auth; on success, navigates to the
- * `next` param (where the user was headed before the redirect).
+ * /login — dual-mode login page
+ * ===============================
+ * AUTH_MODE=password (default): shows the shared-password form (existing behavior).
+ * AUTH_MODE=cognito: immediately redirects to Cognito hosted UI for per-user login.
+ *
+ * The page fetches /api/auth/login-url on mount to detect the active mode.
+ * During the detection phase, a branded loading state is shown.
  */
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function LoginForm() {
@@ -16,6 +18,42 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [authMode, setAuthMode] = useState<'loading' | 'password' | 'cognito'>('loading');
+
+  // Detect auth mode on mount
+  useEffect(() => {
+    const next = params.get('next') || '/intel';
+    fetch(`/api/auth/login-url?next=${encodeURIComponent(next)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.mode === 'cognito' && data.loginUrl) {
+          // Redirect to Cognito hosted UI immediately
+          setAuthMode('cognito');
+          window.location.href = data.loginUrl;
+        } else {
+          setAuthMode('password');
+        }
+      })
+      .catch(() => {
+        // If the fetch fails, fall back to password mode
+        setAuthMode('password');
+      });
+  }, [params]);
+
+  // Show any error from Cognito callback (e.g., token exchange failure)
+  useEffect(() => {
+    const callbackError = params.get('error');
+    if (callbackError) {
+      const messages: Record<string, string> = {
+        no_code: 'Login failed: no authorization code received.',
+        token_exchange: 'Login failed: unable to exchange credentials.',
+        no_id_token: 'Login failed: no identity token received.',
+        config: 'Login configuration error. Contact admin.',
+        access_denied: 'Access denied.',
+      };
+      setError(messages[callbackError] || `Login error: ${callbackError}`);
+    }
+  }, [params]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +79,24 @@ function LoginForm() {
     }
   }
 
+  // Loading state while detecting auth mode
+  if (authMode === 'loading' || authMode === 'cognito') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg">
+        <div className="w-full max-w-sm px-6 text-center">
+          <div className="mb-4 font-display text-2xl font-bold tracking-tight">
+            <span className="text-cyan">Service</span>
+            <span className="text-fg">Sync</span>
+          </div>
+          <p className="text-sm text-muted">
+            {authMode === 'cognito' ? 'Redirecting to sign in…' : 'Loading…'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Password mode — existing UI
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg">
       <div className="w-full max-w-sm px-6">
