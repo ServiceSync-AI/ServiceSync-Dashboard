@@ -91,23 +91,29 @@ export default function TranscriptViewer({
           <p className="text-2xs text-muted">No matching lines.</p>
         )}
         {segments.map((seg, i) => {
+          // Whisper transcripts have no word timings (start === end === 0), so
+          // there's nothing to seek to. Only wire click-to-seek + active
+          // highlighting for segments that carry a real end timestamp.
+          const seekable = seg.end > 0;
           const active =
-            currentTime >= seg.start && currentTime < (seg.end || seg.start + 5);
+            seekable && currentTime >= seg.start && currentTime < seg.end;
           return (
             <button
               key={`${seg.start}-${i}`}
-              onClick={() => onSeek?.(seg.start)}
+              onClick={seekable ? () => onSeek?.(seg.start) : undefined}
               className={`flex w-full gap-3 rounded px-2 py-1 text-left text-xs transition-colors ${
-                active ? 'bg-cyan/10' : 'hover:bg-surface-2/60'
+                active ? 'bg-cyan/10' : seekable ? 'hover:bg-surface-2/60' : 'cursor-default'
               }`}
             >
-              <span
-                className={`shrink-0 font-mono text-2xs ${
-                  active ? 'text-cyan' : 'text-muted'
-                }`}
-              >
-                {formatDuration(seg.start)}
-              </span>
+              {seekable && (
+                <span
+                  className={`shrink-0 font-mono text-2xs ${
+                    active ? 'text-cyan' : 'text-muted'
+                  }`}
+                >
+                  {formatDuration(seg.start)}
+                </span>
+              )}
               <span className="leading-relaxed text-fg/90">
                 {highlight(seg.text, query)}
               </span>
