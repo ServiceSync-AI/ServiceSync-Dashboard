@@ -6,6 +6,12 @@ the PR self-contained.
 ## [Unreleased]
 
 ### Added
+- **Multi-advisor foundation** — the dashboard is no longer hardwired to a single advisor. Additive and non-breaking: everything still defaults to `siltaylor` when no advisor is selected.
+  - `lib/advisors.ts` — `listAdvisors()` reads the new `servicesync-advisors` DynamoDB table (name from `TABLE_ADVISORS`, reusing the shared doc client from `lib/tracker/dynamo.ts`), returning `{ advisorId, advisorName, dealership }[]`; falls back to the single `config.advisorId` when the table is empty/unavailable. `resolveAdvisorId(explicit?)` resolves a selection to a valid id or the configured default.
+  - `app/api/intel/advisors/route.ts` — `GET` returning the advisor directory (Node runtime, force-dynamic, intel-style `Cache-Control`).
+  - `components/AdvisorSelector.tsx` — dark-theme `<select>` in the sidebar; on change it sets the `ss_advisor` cookie (path=/) and `router.refresh()`es the server components.
+  - **Recovery is now advisor-aware** (reference wiring): `app/intel/recovery/page.tsx` and the recovery API read the `ss_advisor` cookie and pass the advisor into `getRecovery(advisorId?)`. `lib/recovery.ts` now scopes transcript loading via `transcriptsPrefixForAdvisor()` (best-effort — all transcripts live under one prefix today, so behavior is unchanged) and keys its in-memory cache per advisor so switching never serves another advisor's result.
+  - `TODO(multi-advisor)` markers left in the Overview / Audio / Activity / Insights loaders (`app/intel/page.tsx`, `app/api/intel/audio/list/route.ts`, `app/intel/insights/page.tsx`, `lib/events.ts`) where they'd honor the selection — tracked as follow-ups.
 - **Declined Work Recovery** (`/intel/recovery`) — the flagship product signal. A Claude (Bedrock, Sonnet 5) pass over the most recent transcripts extracts declined/deferred work as structured items: recommended job, estimated $ value, urgency (safety/maintenance/cosmetic), whether a follow-up was logged, and a verbatim quote. A "Recoverable" hero sums the dollars on items with no logged follow-up — the recovery opportunity. Items sorted safety-first then by value.
   - `lib/bedrock.ts` — IAM-native Bedrock client (`invokeClaude`) + tolerant JSON extraction. Models: Haiku/Sonnet 5/Opus profiles.
   - `lib/recovery.ts` — robust transcript-text reader (handles the Whisper flat `{transcript}` shape **and** AWS Transcribe JSON), the detection prompt, and a 30-min in-memory result cache so refreshes don't re-bill the model.

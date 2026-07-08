@@ -67,6 +67,9 @@ export async function loadEventsInRange(
   const start = new Date(startISO).getTime();
   const end = new Date(endISO).getTime();
 
+  // TODO(multi-advisor): accept an advisorId and scope to that advisor's events
+  // prefix (config.eventsPrefix is Chevyland-only today). See lib/advisors.ts /
+  // the ss_advisor cookie plumbing done for /intel/recovery.
   const objs = await listAll(config.eventsBucket, config.eventsPrefix);
 
   // Candidate objects: modified within a one-day buffer of the requested range.

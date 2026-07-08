@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import AdvisorSelector from './AdvisorSelector';
 
 const NAV_ITEMS = [
   { href: '/intel', label: 'Intel', icon: '📊', description: 'System health & overview' },
@@ -41,6 +42,9 @@ export default function Sidebar() {
           );
         })}
       </nav>
+      <div className="border-t border-border p-3">
+        <AdvisorSelector />
+      </div>
       <div className="border-t border-border p-3 text-xs text-muted">
         Chevyland Chevrolet • Pilot
       </div>

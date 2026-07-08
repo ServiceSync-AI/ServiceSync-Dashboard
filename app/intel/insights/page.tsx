@@ -41,6 +41,8 @@ async function gather() {
   const end = new Date();
   const start = new Date(end.getTime() - WINDOW_DAYS * 86_400_000);
 
+  // TODO(multi-advisor): read the ss_advisor cookie and scope events +
+  // transcripts to the selected advisor (see lib/advisors.ts / recovery wiring).
   const [weekEvents, todayEvents, transcriptObjs] = await Promise.all([
     loadEventsInRange(start.toISOString(), end.toISOString()),
     loadEventsForDay(today),
