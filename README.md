@@ -75,6 +75,14 @@ unauthenticated request to `/login`; `/api/auth` sets an httpOnly cookie holding
 `sha256(password)`. If `DASHBOARD_PASSWORD` is unset, the gate fails open (dev
 convenience) — **always set it in production.**
 
+> **Stage 3 (real per-user sign-in) is designed and scaffolded, but NOT enabled.**
+> With no new env vars set, the shared-password gate above is exactly what runs.
+> `middleware.ts` has an `AUTH_MODE` switch: unset/`password` = today's behavior;
+> `cognito` = per-user AWS Cognito JWT validation (never active until a pool
+> exists and `AUTH_MODE=cognito`). See **[`docs/AUTH_DESIGN.md`](docs/AUTH_DESIGN.md)**
+> for the full design (Cognito pool, `role` attribute, extension device-grant
+> flow, migration + rollout) and `infra/auth.tf` for the (NOT-APPLIED) Terraform.
+
 ---
 
 ## API routes
