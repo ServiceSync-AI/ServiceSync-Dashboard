@@ -15,6 +15,7 @@
  */
 import { getUsageReport, type AdvisorUsage, type UsageReport } from '@/lib/usage';
 import { getCloudSpendMTD, type CloudSpendMTD } from '@/lib/awscost';
+import { getInstancesInfo, type InstancesResponse } from '@/lib/ec2';
 import { clockUTC } from '@/lib/format';
 
 export const runtime = 'nodejs';
@@ -125,6 +126,97 @@ function CloudSpendCard({ spend }: { spend: CloudSpendMTD }) {
   );
 }
 
+/**
+ * Live EC2 infrastructure card — shows all instances, their state, type, and
+ * estimated monthly cost. Fetched server-side via ec2:DescribeInstances.
+ */
+function InfrastructureCard({ infra }: { infra: InstancesResponse | null }) {
+  if (!infra) {
+    return (
+      <div className="card mb-5 border-l-2 border-l-border text-xs leading-relaxed text-fg/90">
+        <span className="stat-label">Infrastructure</span>
+        <p className="mt-2 text-muted">
+          EC2 data unavailable — the dashboard&apos;s AWS identity needs{' '}
+          <span className="font-mono text-cyan">ec2:DescribeInstances</span>.
+        </p>
+      </div>
+    );
+  }
+
+  if (infra.instances.length === 0) {
+    return (
+      <div className="card mb-5 border-l-2 border-l-border text-xs leading-relaxed text-fg/90">
+        <span className="stat-label">Infrastructure</span>
+        <p className="mt-2 text-muted">No EC2 instances found in {infra.region}.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card mb-5 border-l-2 border-l-green">
+      <span className="stat-label">Infrastructure — EC2 instances</span>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+        <span className="font-display text-3xl font-bold text-green">
+          {usd(infra.totalEstimatedMonthlyCost)}
+          <span className="ml-1 text-sm font-normal text-muted">/mo est.</span>
+        </span>
+        <span className="text-2xs text-muted">
+          {infra.instances.length} instance{infra.instances.length === 1 ? '' : 's'} · {infra.region}
+        </span>
+      </div>
+      <div className="mt-3 overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Instance</th>
+              <th>Type</th>
+              <th>State</th>
+              <th className="text-right">Uptime</th>
+              <th className="text-right">$/mo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {infra.instances.map((inst) => (
+              <tr key={inst.instanceId}>
+                <td className="text-fg">{inst.name ?? '—'}</td>
+                <td className="font-mono text-2xs text-muted">{inst.instanceId}</td>
+                <td className="font-mono text-2xs">{inst.instanceType}</td>
+                <td>
+                  <span
+                    className={
+                      inst.state === 'running'
+                        ? 'text-green'
+                        : inst.state === 'stopped'
+                          ? 'text-warn'
+                          : 'text-muted'
+                    }
+                  >
+                    {inst.state}
+                  </span>
+                </td>
+                <td className="text-right text-muted text-2xs">
+                  {inst.uptimeHours != null
+                    ? inst.uptimeHours >= 24
+                      ? `${Math.floor(inst.uptimeHours / 24)}d ${inst.uptimeHours % 24}h`
+                      : `${inst.uptimeHours}h`
+                    : '—'}
+                </td>
+                <td className="text-right text-green">
+                  {inst.estimatedMonthlyCost != null ? usd(inst.estimatedMonthlyCost) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-2xs text-muted">
+        Costs are On-Demand estimates (Linux, {infra.region}). Actual may differ with RIs/Savings Plans.
+      </p>
+    </div>
+  );
+}
+
 export default async function UsagePage() {
   let data: UsageReport | null = null;
   let error: string | null = null;
@@ -135,6 +227,7 @@ export default async function UsagePage() {
   }
 
   const cloudSpend = await getCloudSpendMTD();
+  const infraData = await getInstancesInfo();
 
   const generatedAt = data ? clockUTC(data.generatedAt) : clockUTC(new Date().toISOString());
   const showCost = data?.hasCostData ?? false;
@@ -151,6 +244,9 @@ export default async function UsagePage() {
 
       {/* Owner-side AWS cloud spend (MTD) — additive, independent of per-advisor data. */}
       <CloudSpendCard spend={cloudSpend} />
+
+      {/* Live EC2 infrastructure — per-instance cost view. */}
+      <InfrastructureCard infra={infraData} />
 
       {error ? (
         <div className="card border-l-2 border-l-danger">

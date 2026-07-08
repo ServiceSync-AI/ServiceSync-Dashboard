@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import AdvisorSelector from './AdvisorSelector';
+import LogoutButton from './LogoutButton';
 
 const NAV_ITEMS = [
   { href: '/intel', label: 'Intel', icon: '📊', description: 'System health & overview' },
@@ -50,6 +51,9 @@ export default function Sidebar() {
       </div>
       <div className="border-t border-border p-3 text-xs text-muted">
         Chevyland Chevrolet • Pilot
+        <div className="mt-2">
+          <LogoutButton />
+        </div>
       </div>
     </aside>
   );
