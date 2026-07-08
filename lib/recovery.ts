@@ -129,6 +129,8 @@ async function detectDeclinedWork(advisorId?: string): Promise<RecoveryResult> {
   }
 
   const items: DeclinedItem[] = [];
+  let successes = 0;
+  let failures = 0;
   // One call per transcript keeps prompts small and maps quotes → source cleanly.
   await Promise.all(
     transcripts.map(async (t) => {
@@ -139,6 +141,7 @@ async function detectDeclinedWork(advisorId?: string): Promise<RecoveryResult> {
           model: 'sonnet',
           maxTokens: 1200,
         });
+        successes++;
         const parsed = parseJsonBlock<Array<Record<string, unknown>>>(reply) ?? [];
         for (const r of parsed) {
           if (!r || typeof r.declined_item !== 'string' || !r.declined_item.trim()) continue;
@@ -155,10 +158,17 @@ async function detectDeclinedWork(advisorId?: string): Promise<RecoveryResult> {
           });
         }
       } catch {
-        /* skip transcript the model pass failed on */
+        failures++;
       }
     }),
   );
+
+  // If every transcript analysis failed (e.g. Bedrock access not granted /
+  // throttled), surface that as an error rather than a misleading "no declined
+  // work" — the page renders the "analysis unavailable" card instead.
+  if (successes === 0 && failures > 0) {
+    throw new Error(`declined-work analysis failed on all ${failures} transcript(s) — Bedrock unavailable?`);
+  }
 
   // Surface safety items first, then by dollar value.
   items.sort((a, b) => {
