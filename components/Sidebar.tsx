@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/intel/recovery', label: 'Recovery', icon: '💵', description: 'Declined work' },
   { href: '/intel/usage', label: 'Usage & Cost', icon: '💰', description: 'Per-advisor spend' },
   { href: '/intel/audits', label: 'Audits', icon: '📄', description: 'Nightly reports' },
+  { href: '/intel/conversations', label: 'Conversations', icon: '💬', description: 'Assistant chat history' },
   { href: '/intel/live', label: 'Live', icon: '⚡', description: 'Remote actions' },
   { href: '/console', label: 'Repair Board', icon: '🔧', description: 'Advisor console' },
   { href: '/tracker', label: 'Tracker', icon: '🚗', description: 'Customer status' },
