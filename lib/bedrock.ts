@@ -10,13 +10,21 @@
  * Haiku elsewhere (the extension); analysis here defaults to Sonnet 5.
  */
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
+import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { config } from './config';
 
 let client: BedrockRuntimeClient | null = null;
 
 function bedrock(): BedrockRuntimeClient {
   if (!client) {
-    client = new BedrockRuntimeClient({ region: config.aws.region });
+    // Fail fast: cap retries and time out a stuck request so a Bedrock outage
+    // (or the account model-access gate) surfaces an error quickly instead of
+    // hanging the server render / tripping the tunnel's 502 timeout.
+    client = new BedrockRuntimeClient({
+      region: config.aws.region,
+      maxAttempts: 2,
+      requestHandler: new NodeHttpHandler({ connectionTimeout: 3000, requestTimeout: 12000 }),
+    });
   }
   return client;
 }
