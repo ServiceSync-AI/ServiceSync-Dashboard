@@ -27,6 +27,8 @@ const config: Config = {
         // Brand accents.
         cyan: '#06B6D4',
         brand: '#0A7AFF',
+        violet: '#8B5CF6',
+        magenta: '#D946EF',
         // Status semantics.
         ok: '#3fb950',
         warn: '#d29922',
