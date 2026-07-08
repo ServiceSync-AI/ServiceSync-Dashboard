@@ -180,7 +180,7 @@ async function detectDeclinedWork(advisorId?: string): Promise<RecoveryResult> {
   return { items, totalDollars, transcriptsScanned: transcripts.length, model: MODEL_LABEL, generatedAt };
 }
 
-const MODEL_LABEL = 'claude-sonnet-5 (Bedrock)';
+const MODEL_LABEL = 'claude-sonnet-4-6 (Bedrock)';
 
 /**
  * Cached entry point. Returns the last result within the TTL to avoid
