@@ -16,6 +16,7 @@ the PR self-contained.
 - New dependency: `@aws-sdk/client-bedrock-runtime`.
 
 ### Fixed
+- **Transcript parsing for the live Whisper shape.** `parseTranscript` (`lib/transcribe.ts`) only understood AWS Transcribe JSON (`results.audio_segments`/`items`/`transcripts`), but the live pilot transcripts in S3 are the flat Whisper Lambda output (`{ transcript, word_count, ... }`). On real data it produced empty/garbage output, breaking the Audio tab's transcript viewer and the Insights keyword scan. It now detects the Whisper flat shape first (string `transcript`, no `results`) and builds a `Transcript` from it — full text, `word_count` (or computed), `duration_sec`/`duration` if present else 0, and readable sentence/~25-word segments with zero timestamps. All AWS Transcribe paths are kept intact as fallbacks. `TranscriptViewer` now only wires click-to-seek + active-line highlighting when a segment has a real end timestamp, so zero-timestamp Whisper segments render as plain readable lines.
 - `CLAUDE.md` rewritten — it described a pre-build Supabase/n8n/Vercel plan that never shipped; the app is a built Next.js 14 + AWS (S3/Transcribe/DynamoDB/Bedrock) dashboard.
 
 ## [0.1.0] — 2026-06-19
