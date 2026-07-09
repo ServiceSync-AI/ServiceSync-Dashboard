@@ -18,6 +18,8 @@ import { resolveAdvisorId } from '@/lib/advisors';
 import { clockUTC, relativeTime } from '@/lib/format';
 import RecoveryDatePicker from '@/components/RecoveryDatePicker';
 import DraftWinBackButton from '@/components/DraftWinBackButton';
+import RevenuePipeline from '@/components/RevenuePipeline';
+import RecoveryStatusButtons from '@/components/RecoveryStatusButtons';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -101,6 +103,9 @@ export default async function RecoveryPage({
               </span>
             </div>
           </div>
+
+          {/* Revenue Pipeline — recovery tracking summary */}
+          {outreach.length > 0 && <RevenuePipeline outreach={outreach as never[]} />}
 
           {/* Items */}
           {!data || data.items.length === 0 ? (
@@ -198,6 +203,12 @@ export default async function RecoveryPage({
                     <p className="mt-2 whitespace-pre-wrap border-l border-border pl-2 text-xs leading-relaxed text-fg/90">
                       {o.draft_text}
                     </p>
+                    <RecoveryStatusButtons
+                      advisorId={o.advisor_id}
+                      ts={o.ts}
+                      currentStatus={(o as unknown as Record<string, unknown>).recovery_status as 'recovered' | 'lost' | 'pending' | undefined}
+                      estDollars={o.est_dollars}
+                    />
                   </div>
                 ))}
               </div>

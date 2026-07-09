@@ -130,3 +130,48 @@ export async function listOutreach(advisorId: string, limit = 25): Promise<Outre
   );
   return (Items as OutreachRecord[]) ?? [];
 }
+
+/** Recovery status — tracks whether a declined item was eventually recovered. */
+export type RecoveryStatus = 'recovered' | 'lost' | 'pending';
+
+/**
+ * Update the recovery_status of an outreach record in DynamoDB.
+ * Used when a human marks a declined item as recovered (customer came back)
+ * or lost (30 days passed, not coming back).
+ */
+export async function updateRecoveryStatus(args: {
+  advisorId: string;
+  ts: string;
+  recoveryStatus: 'recovered' | 'lost';
+  recoveredAmount?: number;
+}): Promise<OutreachRecord & { recovery_status: RecoveryStatus; recovery_updated_at: string; recovered_amount?: number }> {
+  const { UpdateCommand: DynUpdateCommand } = await import('@aws-sdk/lib-dynamodb');
+  const now = new Date().toISOString();
+
+  let updateExpr = 'SET recovery_status = :rs, recovery_updated_at = :now';
+  const exprValues: Record<string, unknown> = {
+    ':rs': args.recoveryStatus,
+    ':now': now,
+  };
+
+  if (args.recoveredAmount != null && isFinite(args.recoveredAmount)) {
+    updateExpr += ', recovered_amount = :amt';
+    exprValues[':amt'] = args.recoveredAmount;
+  }
+
+  const { Attributes } = await getDoc().send(
+    new DynUpdateCommand({
+      TableName: TABLE_OUTREACH,
+      Key: { advisor_id: args.advisorId, ts: args.ts },
+      UpdateExpression: updateExpr,
+      ExpressionAttributeValues: exprValues,
+      ReturnValues: 'ALL_NEW',
+    }),
+  );
+
+  return Attributes as OutreachRecord & {
+    recovery_status: RecoveryStatus;
+    recovery_updated_at: string;
+    recovered_amount?: number;
+  };
+}

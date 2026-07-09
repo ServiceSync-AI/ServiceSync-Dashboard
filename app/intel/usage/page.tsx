@@ -17,6 +17,7 @@ import { getUsageReport, type AdvisorUsage, type UsageReport } from '@/lib/usage
 import { getCloudSpendMTD, type CloudSpendMTD } from '@/lib/awscost';
 import { getInstancesInfo, type InstancesResponse } from '@/lib/ec2';
 import { clockUTC } from '@/lib/format';
+import PilotROI from '@/components/PilotROI';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -244,6 +245,9 @@ export default async function UsagePage() {
 
       {/* Owner-side AWS cloud spend (MTD) — additive, independent of per-advisor data. */}
       <CloudSpendCard spend={cloudSpend} />
+
+      {/* Pilot ROI — cost per insight across all sources. */}
+      <PilotROI />
 
       {/* Live EC2 infrastructure — per-instance cost view. */}
       <InfrastructureCard infra={infraData} />

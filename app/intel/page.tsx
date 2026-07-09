@@ -14,6 +14,7 @@ import { todayUTC, relativeTime, absoluteTime, formatBytes, clockUTC } from '@/l
 import { classifySystem } from '@/lib/analyze';
 import StatusCard from '@/components/StatusCard';
 import RefreshButton from '@/components/RefreshButton';
+import ExtensionHealth from '@/components/ExtensionHealth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -151,6 +152,12 @@ export default async function OverviewPage() {
           sub={`of ${d.audioCount} recordings`}
         />
       </div>
+
+      {/* Extension Health — uptime monitor */}
+      <section className="mt-5">
+        <h2 className="stat-label mb-2">Extension Uptime</h2>
+        <ExtensionHealth />
+      </section>
 
       {/* Recent activity feed */}
       <section className="mt-6">

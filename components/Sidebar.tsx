@@ -6,12 +6,15 @@ import LogoutButton from './LogoutButton';
 
 const NAV_ITEMS = [
   { href: '/intel', label: 'Intel', icon: '📊', description: 'System health & overview' },
+  { href: '/intel/scorecard', label: 'Scorecard', icon: '🎯', description: 'Daily productivity score' },
+  { href: '/intel/compare', label: 'Compare', icon: '⚖️', description: 'Before/after comparison' },
   { href: '/intel/audio', label: 'Audio', icon: '🎙️', description: 'Recordings & transcripts' },
   { href: '/intel/activity', label: 'Activity', icon: '📈', description: 'Session timeline' },
   { href: '/intel/insights', label: 'Insights', icon: '💡', description: 'Daily summary' },
   { href: '/intel/recovery', label: 'Recovery', icon: '💵', description: 'Declined work' },
   { href: '/intel/usage', label: 'Usage & Cost', icon: '💰', description: 'Per-advisor spend' },
   { href: '/intel/audits', label: 'Audits', icon: '📄', description: 'Nightly reports' },
+  { href: '/intel/report', label: 'Weekly Report', icon: '📋', description: 'Weekly pilot summary' },
   { href: '/intel/conversations', label: 'Conversations', icon: '💬', description: 'Assistant chat history' },
   { href: '/intel/live', label: 'Live', icon: '⚡', description: 'Remote actions' },
   { href: '/console', label: 'Repair Board', icon: '🔧', description: 'Advisor console' },
