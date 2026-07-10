@@ -23,7 +23,11 @@ import { s3 } from '@/lib/s3';
 import { config } from '@/lib/config';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
+
+// ─── In-memory cache for Cost Explorer calls (24h TTL) ──────────────────────
+let _ceCache: { key: string; value: number; ts: number } | null = null;
+const CE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -78,8 +82,13 @@ function num(v: unknown): number {
 /**
  * AWS Cost Explorer: total UnblendedCost for the period.
  * Falls back to 0 if Cost Explorer is inaccessible.
+ * Uses in-memory cache with 24h TTL to avoid repeated Cost Explorer calls.
  */
 async function fetchAwsSpend(start: string, end: string): Promise<number> {
+  const cacheKey = `${start}|${end}`;
+  if (_ceCache && _ceCache.key === cacheKey && Date.now() - _ceCache.ts < CE_TTL_MS) {
+    return _ceCache.value;
+  }
   try {
     const ce = new CostExplorerClient({ region: 'us-east-1' });
     const res = await ce.send(
@@ -89,10 +98,12 @@ async function fetchAwsSpend(start: string, end: string): Promise<number> {
         Metrics: ['UnblendedCost'],
       }),
     );
-    return (res.ResultsByTime ?? []).reduce(
+    const total = (res.ResultsByTime ?? []).reduce(
       (sum, r) => sum + Number(r.Total?.UnblendedCost?.Amount ?? '0'),
       0,
     );
+    _ceCache = { key: cacheKey, value: total, ts: Date.now() };
+    return total;
   } catch {
     return 0;
   }
@@ -248,7 +259,7 @@ export async function GET(req: NextRequest) {
     };
 
     return NextResponse.json(body, {
-      headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
+      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
     });
   } catch (err) {
     return NextResponse.json(

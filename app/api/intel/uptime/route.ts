@@ -12,7 +12,7 @@ import { loadEventsForDay } from '@/lib/events';
 import { todayUTC } from '@/lib/format';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const revalidate = 120;
 
 /** Business hours in UTC offset (ET is UTC-4 in summer, UTC-5 in winter). */
 const BIZ_START_HOUR = 12; // 8AM ET = 12:00 UTC (EDT)

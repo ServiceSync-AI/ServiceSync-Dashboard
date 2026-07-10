@@ -16,7 +16,7 @@ import {
 import { resolveAdvisorId } from '@/lib/advisors';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const revalidate = 120;
 
 export async function GET(req: Request) {
   try {

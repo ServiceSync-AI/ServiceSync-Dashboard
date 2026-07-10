@@ -18,7 +18,7 @@ import { resolveAdvisorId } from '@/lib/advisors';
 import { updateRecoveryStatus } from '@/lib/outreach';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 export async function GET(req: Request) {
   try {

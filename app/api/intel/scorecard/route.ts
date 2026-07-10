@@ -22,7 +22,7 @@ import { getDoc } from '@/lib/tracker/dynamo';
 import type { BrowserEvent, EventsSummary } from '@/lib/types';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const revalidate = 300;
 
 const TABLE_ASSISTANT_USAGE =
   process.env.TABLE_ASSISTANT_USAGE ?? 'servicesync-assistant-usage';

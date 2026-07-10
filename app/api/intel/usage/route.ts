@@ -11,7 +11,7 @@ import { NextResponse } from 'next/server';
 import { getUsageReport } from '@/lib/usage';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600;
 
 export async function GET() {
   try {
