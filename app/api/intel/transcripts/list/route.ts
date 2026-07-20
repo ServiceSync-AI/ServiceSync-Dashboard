@@ -16,7 +16,10 @@ export const runtime = 'nodejs';
 // Always read live S3; the Cache-Control header below handles the 5-min cache.
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const limit = Math.min(100, parseInt(url.searchParams.get('limit') || '30', 10));
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
   try {
     const objs = await listAll(config.audioBucket, config.transcriptsPrefix);
     const entries: TranscriptListEntry[] = objs
@@ -34,9 +37,10 @@ export async function GET() {
         };
       })
       .sort((a, b) => b.lastModified.localeCompare(a.lastModified))
-      .slice(0, 30); // Only return most recent 30 to prevent large payloads
+      .slice(offset, offset + limit);
 
-    return NextResponse.json(entries, {
+    const total = objs.filter((o) => o.Key && /\.json$/i.test(o.Key)).length;
+    return NextResponse.json({ entries, total, limit, offset, hasMore: offset + limit < total }, {
       headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
     });
   } catch (err) {
