@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: '/intel/mpi', label: 'MPI Estimate', icon: '📸', description: 'Photo → AI estimate' },
   { href: '/intel/voice-ro', label: 'Voice RO', icon: '🎤', description: 'Speech-to-repair-order' },
   { href: '/intel/predict', label: 'Predict', icon: '🔮', description: 'Predictive scheduling' },
+  { href: '/intel/rewind', label: 'Rewind', icon: '⏪', description: 'Desktop capture timeline' },
   { href: '/intel/live', label: 'Live', icon: '⚡', description: 'Remote actions' },
   { href: '/console', label: 'Repair Board', icon: '🔧', description: 'Advisor console' },
   { href: '/tracker', label: 'Tracker', icon: '🚗', description: 'Customer status' },
