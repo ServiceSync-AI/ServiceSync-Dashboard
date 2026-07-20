@@ -73,6 +73,7 @@ export default function RewindPage() {
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
   const [isDragging, setIsDragging] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [prevUrl, setPrevUrl] = useState<string | null>(null);
 
   const scrubberRef = useRef<HTMLDivElement>(null);
@@ -180,6 +181,10 @@ export default function RewindPage() {
         case ' ':
           e.preventDefault();
           setIsPlaying((prev) => !prev);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setIsFullscreen(false);
           break;
       }
     };
@@ -433,23 +438,54 @@ export default function RewindPage() {
             </div>
 
             {/* ─── Main Viewport ──────────────────────────────────────── */}
-            <div className="relative mb-3 flex flex-1 items-center justify-center overflow-hidden rounded-lg border border-border bg-black" style={{ maxHeight: '60vh', minHeight: '300px' }}>
+            <div
+              className={`relative mb-3 flex items-center justify-center rounded-lg border border-border bg-black transition-all ${
+                isFullscreen ? 'fixed inset-0 z-50 m-0 rounded-none border-0' : 'flex-1'
+              }`}
+              style={isFullscreen ? {} : { maxHeight: '60vh', minHeight: '300px' }}
+            >
               {currentScreenshot ? (
                 <>
-                  {/* Current image with crossfade */}
-                  <img
-                    key={currentScreenshot.url}
-                    src={currentScreenshot.url}
-                    alt={`Screenshot at ${formatTimestamp(currentScreenshot.timestamp)}`}
-                    className="h-full w-full object-contain transition-opacity duration-300"
-                    style={{ opacity: imageLoaded ? 1 : 0 }}
-                    onLoad={() => setImageLoaded(true)}
-                    draggable={false}
-                  />
+                  {/* Scrollable/pannable image container */}
+                  <div className="h-full w-full overflow-auto">
+                    <img
+                      key={currentScreenshot.url}
+                      src={currentScreenshot.url}
+                      alt={`Screenshot at ${formatTimestamp(currentScreenshot.timestamp)}`}
+                      className={`transition-opacity duration-300 ${
+                        isFullscreen ? 'min-w-full cursor-grab' : 'h-full w-full object-contain'
+                      }`}
+                      style={{ opacity: imageLoaded ? 1 : 0 }}
+                      onLoad={() => setImageLoaded(true)}
+                      draggable={false}
+                    />
+                  </div>
 
                   {/* Loading shimmer overlay */}
                   {!imageLoaded && (
                     <div className="absolute inset-0 animate-pulse bg-surface/50" />
+                  )}
+
+                  {/* Fullscreen toggle */}
+                  <button
+                    onClick={() => setIsFullscreen(!isFullscreen)}
+                    className="absolute right-4 top-4 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-medium text-fg backdrop-blur-sm transition-colors hover:bg-black/90"
+                  >
+                    {isFullscreen ? 'Esc · Exit' : '⛶ Fullscreen'}
+                  </button>
+
+                  {/* Arrow nav in fullscreen */}
+                  {isFullscreen && (
+                    <>
+                      <button
+                        onClick={() => setActiveIndex(Math.max(0, activeIndex - 1))}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-2xl text-white backdrop-blur-sm hover:bg-black/80"
+                      >‹</button>
+                      <button
+                        onClick={() => setActiveIndex(Math.min(screenshots.length - 1, activeIndex + 1))}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-3 text-2xl text-white backdrop-blur-sm hover:bg-black/80"
+                      >›</button>
+                    </>
                   )}
 
                   {/* Timestamp overlay */}
