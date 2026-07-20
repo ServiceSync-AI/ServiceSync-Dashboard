@@ -172,19 +172,26 @@ export default function AudioPage() {
   const rafRef = useRef<number>(0);
 
   // ─── Data fetching ───────────────────────────────────────────────────
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+
+  const loadFiles = async (offsetVal: number, append = false) => {
+    try {
+      const res = await fetch(`/api/intel/audio/list?limit=30&offset=${offsetVal}`);
+      if (!res.ok) throw new Error(`list failed (${res.status})`);
+      const data = await res.json();
+      setFiles((prev) => append ? [...prev, ...data.files] : data.files);
+      setHasMore(data.hasMore);
+      setOffset(offsetVal + data.files.length);
+    } catch (e) {
+      setError(String((e as Error).message));
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/intel/audio/list');
-        if (!res.ok) throw new Error(`list failed (${res.status})`);
-        const data: AudioFile[] = await res.json();
-        setFiles(data);
-      } catch (e) {
-        setError(String((e as Error).message));
-      } finally {
-        setLoadingList(false);
-      }
-    })();
+    loadFiles(0);
   }, []);
 
   // ─── Derived: files grouped by date ──────────────────────────────────
@@ -489,6 +496,14 @@ export default function AudioPage() {
                   </button>
                 );
               })}
+              {hasMore && (
+                <button
+                  onClick={() => loadFiles(offset, true)}
+                  className="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted transition-colors hover:border-cyan hover:text-cyan"
+                >
+                  Load more…
+                </button>
+              )}
             </div>
           </div>
         </div>

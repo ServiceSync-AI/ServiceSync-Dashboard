@@ -29,7 +29,11 @@ function recordingTime(name: string): string {
   return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const limit = Math.min(100, parseInt(url.searchParams.get('limit') || '30', 10));
+  const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
   try {
     // TODO(multi-advisor): honor the ss_advisor cookie and scope audioPrefix /
     // transcriptsPrefix to the selected advisor (see lib/advisors.ts and the
@@ -73,7 +77,10 @@ export async function GET() {
       })
       .sort((a, b) => b.lastModified.localeCompare(a.lastModified));
 
-    return NextResponse.json(files, {
+    const total = files.length;
+    const paged = files.slice(offset, offset + limit);
+
+    return NextResponse.json({ files: paged, total, limit, offset, hasMore: offset + limit < total }, {
       headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
     });
   } catch (err) {
