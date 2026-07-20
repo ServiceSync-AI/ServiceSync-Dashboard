@@ -18,6 +18,7 @@ import { getCloudSpendMTD, type CloudSpendMTD } from '@/lib/awscost';
 import { getInstancesInfo, type InstancesResponse } from '@/lib/ec2';
 import { clockUTC } from '@/lib/format';
 import PilotROI from '@/components/PilotROI';
+import RunwayCard from '@/components/RunwayCard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -248,6 +249,7 @@ export default async function UsagePage() {
 
       {/* Pilot ROI — cost per insight across all sources. */}
       <PilotROI />
+      <RunwayCard />
 
       {/* Live EC2 infrastructure — per-instance cost view. */}
       <InfrastructureCard infra={infraData} />

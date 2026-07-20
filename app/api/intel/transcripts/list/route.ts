@@ -33,7 +33,8 @@ export async function GET() {
           size: o.Size ?? 0,
         };
       })
-      .sort((a, b) => b.lastModified.localeCompare(a.lastModified));
+      .sort((a, b) => b.lastModified.localeCompare(a.lastModified))
+      .slice(0, 30); // Only return most recent 30 to prevent large payloads
 
     return NextResponse.json(entries, {
       headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=600' },
