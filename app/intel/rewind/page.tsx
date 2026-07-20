@@ -261,7 +261,7 @@ export default function RewindPage() {
 
   // ─── Render ──────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen flex-col overflow-hidden px-4 py-4 lg:px-6">
+    <div className="flex h-screen flex-col overflow-hidden px-4 py-4 lg:px-6" style={{ maxWidth: '100vw' }}>
       {/* ─── Header + Controls ──────────────────────────────────────── */}
       <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -446,20 +446,16 @@ export default function RewindPage() {
             >
               {currentScreenshot ? (
                 <>
-                  {/* Scrollable/pannable image container */}
-                  <div className="h-full w-full overflow-auto">
-                    <img
-                      key={currentScreenshot.url}
-                      src={currentScreenshot.url}
-                      alt={`Screenshot at ${formatTimestamp(currentScreenshot.timestamp)}`}
-                      className={`transition-opacity duration-300 ${
-                        isFullscreen ? 'min-w-full cursor-grab' : 'h-full w-full object-contain'
-                      }`}
-                      style={{ opacity: imageLoaded ? 1 : 0 }}
-                      onLoad={() => setImageLoaded(true)}
-                      draggable={false}
-                    />
-                  </div>
+                  <img
+                    key={currentScreenshot.url}
+                    src={currentScreenshot.url}
+                    alt={`Screenshot at ${formatTimestamp(currentScreenshot.timestamp)}`}
+                    className="max-h-full max-w-full object-contain transition-opacity duration-300"
+                    style={{ opacity: imageLoaded ? 1 : 0 }}
+                    onLoad={() => setImageLoaded(true)}
+                    onClick={() => setIsFullscreen(true)}
+                    draggable={false}
+                  />
 
                   {/* Loading shimmer overlay */}
                   {!imageLoaded && (
@@ -471,7 +467,7 @@ export default function RewindPage() {
                     onClick={() => setIsFullscreen(!isFullscreen)}
                     className="absolute right-4 top-4 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-medium text-fg backdrop-blur-sm transition-colors hover:bg-black/90"
                   >
-                    {isFullscreen ? 'Esc · Exit' : '⛶ Fullscreen'}
+                    {isFullscreen ? 'Esc · Exit' : 'Click image to expand'}
                   </button>
 
                   {/* Arrow nav in fullscreen */}
