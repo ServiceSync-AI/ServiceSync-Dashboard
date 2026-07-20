@@ -15,6 +15,7 @@ import { classifySystem } from '@/lib/analyze';
 import StatusCard from '@/components/StatusCard';
 import RefreshButton from '@/components/RefreshButton';
 import ExtensionHealth from '@/components/ExtensionHealth';
+import ServiceHealth from '@/components/ServiceHealth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -157,6 +158,12 @@ export default async function OverviewPage() {
       <section className="mt-5">
         <h2 className="stat-label mb-2">Extension Uptime</h2>
         <ExtensionHealth />
+      </section>
+
+      {/* Service Health — watchdog heartbeat */}
+      <section className="mt-5">
+        <h2 className="stat-label mb-2">Dealer PC Services</h2>
+        <ServiceHealth />
       </section>
 
       {/* Recent activity feed */}
