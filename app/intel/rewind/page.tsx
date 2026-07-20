@@ -261,7 +261,7 @@ export default function RewindPage() {
 
   // ─── Render ──────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen flex-col overflow-hidden px-4 py-4 lg:px-6" style={{ maxWidth: '100vw' }}>
+    <div className="flex h-screen flex-col overflow-x-hidden overflow-y-auto px-4 py-4 lg:px-6">
       {/* ─── Header + Controls ──────────────────────────────────────── */}
       <header className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -372,9 +372,9 @@ export default function RewindPage() {
 
       {/* ─── Main Content (when screenshots exist) ──────────────────── */}
       {!loading && !error && screenshots.length > 0 && (
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:gap-4">
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:gap-4 overflow-hidden">
           {/* ─── Left: Timeline + Viewport + Thumbs ─────────────────── */}
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {/* ─── Timeline Scrubber ──────────────────────────────────── */}
             <div className="card mb-3 p-3">
               <div
