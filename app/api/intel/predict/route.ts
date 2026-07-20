@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server';
 import { loadEventsInRange } from '@/lib/events';
 
 export const runtime = 'nodejs';
-export const revalidate = 300; // cache 5 minutes
+export const revalidate = 3600; // cache 1 hour — historical patterns dont change fast
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
