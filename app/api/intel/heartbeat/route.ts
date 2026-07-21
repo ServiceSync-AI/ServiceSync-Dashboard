@@ -2,55 +2,61 @@
  * GET /api/intel/heartbeat — Service Health from Watchdog
  * ========================================================
  * Reads the latest heartbeat from DynamoDB (servicesync-heartbeats table)
- * and returns service status with staleness info.
+ * for the siltaylor-chevyland advisor and returns service status with
+ * staleness info.
  *
- * Returns: { advisor_id, services, lastSeen, minutesAgo }
+ * Returns: { advisor_id, services: {rewind, ambient, upload, chrome}, lastSeen, minutesAgo }
  */
 import { NextResponse } from 'next/server';
-import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 export const runtime = 'nodejs';
 export const revalidate = 60;
 
-const dynamo = new DynamoDBClient({ region: 'us-east-1' });
+const client = new DynamoDBClient({ region: 'us-east-1' });
+const dynamo = DynamoDBDocumentClient.from(client);
 
-interface HeartbeatItem {
-  advisor_id: string;
-  services: Record<string, string>;
-  lastSeen: string;
-  minutesAgo: number;
-}
+const ADVISOR_ID = 'siltaylor-chevyland';
 
 export async function GET() {
   try {
     const result = await dynamo.send(
-      new ScanCommand({ TableName: 'servicesync-heartbeats' }),
+      new GetCommand({
+        TableName: 'servicesync-heartbeats',
+        Key: { advisor_id: ADVISOR_ID },
+      }),
     );
 
-    const items: HeartbeatItem[] = (result.Items ?? []).map((item) => {
-      const advisorId = item.advisor_id?.S ?? 'unknown';
-      const timestamp = item.timestamp?.S ?? item.received_at?.S ?? '';
-      const servicesMap = item.services?.M ?? {};
+    if (!result.Item) {
+      return NextResponse.json(
+        { error: 'No heartbeat found', advisor_id: ADVISOR_ID },
+        { status: 404 },
+      );
+    }
 
-      const services: Record<string, string> = {};
-      for (const [key, val] of Object.entries(servicesMap)) {
-        services[key] = val.S ?? 'unknown';
-      }
+    const item = result.Item;
+    const timestamp = (item.timestamp as string) ?? '';
+    const servicesRaw = (item.services as Record<string, string>) ?? {};
 
-      const lastSeen = timestamp;
-      const minutesAgo = timestamp
-        ? Math.round((Date.now() - new Date(timestamp).getTime()) / 60_000)
-        : 9999;
+    const services = {
+      rewind: servicesRaw.rewind ?? 'unknown',
+      ambient: servicesRaw.ambient ?? 'unknown',
+      upload: servicesRaw.upload ?? 'unknown',
+      chrome: servicesRaw.chrome ?? 'unknown',
+    };
 
-      return { advisor_id: advisorId, services, lastSeen, minutesAgo };
-    });
+    const minutesAgo = timestamp
+      ? Math.round((Date.now() - new Date(timestamp).getTime()) / 60_000)
+      : 9999;
 
-    return NextResponse.json(items, {
-      headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=120' },
-    });
+    return NextResponse.json(
+      { advisor_id: ADVISOR_ID, services, lastSeen: timestamp, minutesAgo },
+      { headers: { 'Cache-Control': 's-maxage=60, stale-while-revalidate=120' } },
+    );
   } catch (err) {
     return NextResponse.json(
-      { error: 'Failed to fetch heartbeats', detail: String((err as Error).message) },
+      { error: 'Failed to fetch heartbeat', detail: String((err as Error).message) },
       { status: 500 },
     );
   }
