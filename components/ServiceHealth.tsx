@@ -1,104 +1,55 @@
 'use client';
-
-/**
- * ServiceHealth — Advisor Station Health
- * ========================================
- * Shows per-service status (Rewind, Ambient, Upload, Chrome) as colored dots.
- * Green = running, Red = stopped, Amber = restarted.
- * Warns if last heartbeat > 20 minutes ago.
- */
 import { useEffect, useState } from 'react';
 
 interface HeartbeatData {
-  advisor_id: string;
-  services: { rewind: string; ambient: string; upload: string; chrome: string };
-  lastSeen: string;
+  services: Record<string, string> | null;
+  lastSeen?: string;
   minutesAgo: number;
 }
 
-const SERVICES: { key: keyof HeartbeatData['services']; label: string }[] = [
-  { key: 'rewind', label: 'Rewind (Desktop Capture)' },
-  { key: 'ambient', label: 'Ambient (Audio Recording)' },
-  { key: 'upload', label: 'Upload (S3 Sync)' },
-  { key: 'chrome', label: 'Chrome (Extension)' },
-];
-
-const STALE_MINUTES = 20;
-
-function dotColor(status: string): string {
-  if (status === 'running') return 'bg-[#34d399]';
-  if (status === 'restarted') return 'bg-[#fbbf24]';
-  return 'bg-[#f85149]'; // stopped or unknown
-}
+const SERVICE_LABELS: Record<string, string> = {
+  rewind: 'Desktop Capture',
+  ambient: 'Audio Recording',
+  upload: 'S3 Sync',
+  chrome: 'Extension',
+};
 
 export default function ServiceHealth() {
   const [data, setData] = useState<HeartbeatData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/intel/heartbeat')
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<HeartbeatData>;
-      })
+      .then((r) => r.json())
       .then(setData)
-      .catch((err) => setError(String(err.message)))
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, []);
 
-  if (loading) {
-    return (
-      <div className="card p-4 animate-pulse">
-        <span className="stat-label">Advisor Station Health</span>
-        <div className="mt-2 h-20 rounded bg-surface-2" />
-      </div>
-    );
-  }
+  if (!data || !data.services) return null;
 
-  if (error) {
-    return (
-      <div className="card p-4 border-l-2 border-l-warn">
-        <span className="stat-label">Advisor Station Health</span>
-        <p className="mt-2 text-xs text-muted">Unable to load: {error}</p>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="card p-4">
-        <span className="stat-label">Advisor Station Health</span>
-        <p className="mt-2 text-xs text-muted">No heartbeat data received yet.</p>
-      </div>
-    );
-  }
-
-  const isStale = data.minutesAgo > STALE_MINUTES;
+  const stale = data.minutesAgo > 20;
 
   return (
     <div className="card p-4">
-      <span className="stat-label">Advisor Station Health</span>
-
-      <div className="mt-3 space-y-2">
-        {SERVICES.map(({ key, label }) => {
-          const status = data.services[key];
-          return (
-            <div key={key} className="flex items-center gap-2">
-              <span
-                className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${dotColor(status)}`}
-                aria-label={`${label}: ${status}`}
-              />
-              <span className="text-xs text-fg/80">{label}</span>
-              <span className="ml-auto text-xs font-medium text-muted">{status}</span>
-            </div>
-          );
-        })}
+      <div className="mb-3 flex items-center justify-between">
+        <span className="stat-label">Advisor Station Health</span>
+        <span className={`text-2xs ${stale ? 'text-[#f85149]' : 'text-muted'}`}>
+          {stale ? '⚠ Stale' : `${data.minutesAgo}m ago`}
+        </span>
       </div>
-
-      <div className={`mt-3 text-2xs ${isStale ? 'text-danger font-medium' : 'text-muted'}`}>
-        {isStale && '⚠ '}Last check: {data.minutesAgo} min ago
-        {isStale && ' — heartbeat may be offline'}
+      <div className="space-y-2">
+        {Object.entries(data.services).map(([key, status]) => (
+          <div key={key} className="flex items-center gap-2.5">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                status === 'running' ? 'bg-[#34d399]' :
+                status === 'restarted' ? 'bg-[#fbbf24]' :
+                'bg-[#f85149]'
+              }`}
+            />
+            <span className="text-xs text-fg">{SERVICE_LABELS[key] || key}</span>
+            <span className="ml-auto text-2xs text-muted">{status}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
