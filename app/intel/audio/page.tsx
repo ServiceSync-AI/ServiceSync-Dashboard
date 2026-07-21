@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import StatusCard from '@/components/StatusCard';
-import { formatBytes, formatDuration, relativeTime, todayUTC, clockUTC } from '@/lib/format';
+import { formatBytes, formatDuration, relativeTime, todayUTC, clockUTC, filenameToCentralTime, filenameToLabel, estimateDuration } from '@/lib/format';
 import type { AudioFile, Transcript, TranscriptSegment } from '@/lib/types';
 
 /* ═══════════════════════════════ TYPES ═══════════════════════════════════ */
@@ -36,7 +36,9 @@ function dateOffset(daysBack: number): string {
 }
 
 function isoToDate(iso: string): string {
-  return iso.slice(0, 10);
+  // Convert to Central Time date for grouping
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }); // en-CA gives YYYY-MM-DD
 }
 
 function minuteOfDay(iso: string): number {
@@ -99,8 +101,9 @@ function buildConversation(
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZone: 'America/Chicago',
     });
-    label = `Conversation ${id} — ${timeStr}`;
+    label = `Conversation ${id} — ${timeStr} CT`;
   }
 
   // Summary: first ~60 chars of the first segment
@@ -164,6 +167,10 @@ export default function AudioPage() {
   // Transcript UI
   const [searchQuery, setSearchQuery] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
+
+  // Manual transcription
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcribeStatus, setTranscribeStatus] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement>(null!);
   const timelineRef = useRef<HTMLDivElement>(null!);
@@ -261,6 +268,58 @@ export default function AudioPage() {
       }
     }
   }, []);
+
+  // ─── Manual transcription trigger ─────────────────────────────────────
+  const triggerTranscribe = useCallback(async () => {
+    if (!selected || selected.hasTranscript || transcribing) return;
+    setTranscribing(true);
+    setTranscribeStatus('Starting transcription...');
+    try {
+      const res = await fetch('/api/intel/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioKey: selected.key }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTranscribeStatus(data.error || 'Failed to start transcription');
+        setTranscribing(false);
+        return;
+      }
+      const jobName = data.jobName;
+      setTranscribeStatus('Transcribing...');
+      const poll = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/intel/transcribe?job=${encodeURIComponent(jobName)}`);
+          const pollData = await pollRes.json();
+          if (pollData.status === 'COMPLETED') {
+            clearInterval(poll);
+            setTranscribing(false);
+            setTranscribeStatus('Done! Loading transcript...');
+            // Reload transcript
+            if (pollData.transcriptKey) {
+              const tRes = await fetch(`/api/intel/transcripts/${encodeURIComponent(pollData.transcriptKey)}`);
+              if (tRes.ok) setTranscript(await tRes.json());
+            }
+            setTranscribeStatus(null);
+            // Refresh file list to update the indicator dot
+            loadFiles(0);
+          } else if (pollData.status === 'FAILED') {
+            clearInterval(poll);
+            setTranscribing(false);
+            setTranscribeStatus('Transcription failed: ' + (pollData.failureReason || 'unknown'));
+          }
+        } catch {
+          clearInterval(poll);
+          setTranscribing(false);
+          setTranscribeStatus('Error polling status');
+        }
+      }, 3000);
+    } catch (e) {
+      setTranscribing(false);
+      setTranscribeStatus('Error: ' + String((e as Error).message));
+    }
+  }, [selected, transcribing]);
 
   // Auto-select first file when date changes
   useEffect(() => {
@@ -479,8 +538,8 @@ export default function AudioPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-mono text-2xs text-fg">
-                        {f.name}
+                      <span className="truncate text-xs font-medium text-fg">
+                        {filenameToCentralTime(f.name)}
                       </span>
                       <span
                         className={`h-2 w-2 shrink-0 rounded-full ${
@@ -490,7 +549,7 @@ export default function AudioPage() {
                       />
                     </div>
                     <div className="mt-1 flex items-center justify-between text-[10px] text-muted">
-                      <span>{clockUTC(f.lastModified)}</span>
+                      <span>{estimateDuration(f.size)}</span>
                       <span>{formatBytes(f.size)}</span>
                     </div>
                   </button>
@@ -577,12 +636,28 @@ export default function AudioPage() {
                 </div>
               )}
               {!loadingTranscript && !transcript && (
-                <div className="p-4 text-center text-xs text-muted">
-                  {selected
-                    ? selected.hasTranscript
-                      ? 'Failed to load transcript.'
-                      : 'No transcript for this recording.'
-                    : 'Select a recording to view its transcript.'}
+                <div className="flex flex-col items-center gap-3 p-6">
+                  <p className="text-xs text-muted">
+                    {selected
+                      ? selected.hasTranscript
+                        ? 'Failed to load transcript.'
+                        : 'No transcript for this recording.'
+                      : 'Select a recording to view its transcript.'}
+                  </p>
+                  {selected && !selected.hasTranscript && (
+                    <>
+                      <button
+                        onClick={triggerTranscribe}
+                        disabled={transcribing}
+                        className="rounded-md border border-cyan/60 bg-cyan/10 px-4 py-2 text-xs font-medium text-cyan transition-all hover:bg-cyan/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {transcribing ? 'Transcribing...' : '🎙️ Transcribe Now'}
+                      </button>
+                      {transcribeStatus && (
+                        <p className="text-2xs text-muted animate-pulse">{transcribeStatus}</p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
               {!loadingTranscript && transcript && filteredConversations.length === 0 && (
@@ -670,7 +745,7 @@ function AudioPlayerSection({
       {/* Top row: file name + playback info */}
       <div className="flex items-center justify-between">
         <span className="truncate font-mono text-xs text-muted">
-          {selected?.name ?? 'No file selected'}
+          {selected ? filenameToLabel(selected.name) : 'No file selected'}
         </span>
         <div className="flex items-center gap-3">
           {/* Speed controls */}
@@ -881,7 +956,7 @@ function DayTimeline({
             >
               {/* Tooltip */}
               <div className="pointer-events-none absolute -top-8 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded bg-surface-2 px-2 py-1 text-2xs text-fg opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-                {file.name} · {formatBytes(file.size)}
+                {filenameToCentralTime(file.name)} · {estimateDuration(file.size)}
               </div>
             </button>
           );

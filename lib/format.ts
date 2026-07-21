@@ -85,3 +85,66 @@ export function clockUTC(iso: string): string {
 export function todayUTC(now = Date.now()): string {
   return new Date(now).toISOString().slice(0, 10);
 }
+
+// ─── Dealership timezone (Shreveport, LA = Central) ─────────────────────────
+
+const DEALERSHIP_TZ = 'America/Chicago';
+
+/**
+ * Format an ISO timestamp to Central Time clock: "9:37 AM" or "2:15 PM".
+ * Falls back to UTC if timezone formatting fails.
+ */
+export function clockCentral(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '--:--';
+  return d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: DEALERSHIP_TZ,
+  });
+}
+
+/**
+ * Parse a recording filename like "20260721_093724.mp3" into a friendly
+ * Central Time label: "9:37 AM" — using the embedded timestamp (which is
+ * already in the advisor PC's local time = Central).
+ */
+export function filenameToCentralTime(filename: string): string {
+  const match = filename.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+  if (!match) return filename;
+  const [, , , , hh, mm] = match;
+  const hour = parseInt(hh, 10);
+  const minute = mm;
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${h12}:${minute} ${ampm}`;
+}
+
+/**
+ * Parse filename into a fuller label: "Jul 21 · 9:37 AM".
+ */
+export function filenameToLabel(filename: string): string {
+  const match = filename.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+  if (!match) return filename;
+  const [, year, month, day, hh, mm] = match;
+  const hour = parseInt(hh, 10);
+  const minute = mm;
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthName = months[parseInt(month, 10) - 1] || month;
+  return `${monthName} ${parseInt(day, 10)} · ${h12}:${minute} ${ampm}`;
+}
+
+/**
+ * Estimate recording duration from file size.
+ * 30-min chunks at 64kbps ≈ 14.4MB. Returns "~30 min" style string.
+ */
+export function estimateDuration(sizeBytes: number): string {
+  // 64kbps MP3 = 8KB/sec = 480KB/min
+  const minutes = Math.round(sizeBytes / (480 * 1024));
+  if (minutes < 1) return '<1 min';
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return `${minutes} min`;
+}
