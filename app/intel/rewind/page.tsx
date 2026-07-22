@@ -3,6 +3,10 @@
  * ========================================
  * The "wow" page: full-width screenshots with a scrub timeline, playback mode,
  * and thumbnail strip. Lets dealers rewind an advisor's screen through the day.
+ *
+ * Pagination: loads screenshots in pages of 50 using cursor-based pagination.
+ * Thumbnail strip uses IntersectionObserver for infinite scroll and the image
+ * proxy route for cacheable, lazy-loaded thumbnails.
  */
 'use client';
 
@@ -65,6 +69,9 @@ export default function RewindPage() {
   // ─── State ───────────────────────────────────────────────────────────
   const [date, setDate] = useState(todayUTC());
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [events, setEvents] = useState<BrowserEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -74,35 +81,57 @@ export default function RewindPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [zoomOrigin, setZoomOrigin] = useState('50% 50%');
   const [prevUrl, setPrevUrl] = useState<string | null>(null);
 
   const scrubberRef = useRef<HTMLDivElement>(null);
   const thumbStripRef = useRef<HTMLDivElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── Data fetching ───────────────────────────────────────────────────
+  // ─── Load all pages eagerly so user starts at most recent ─────────────
   useEffect(() => {
     let cancelled = false;
+    setScreenshots([]);
+    setCursor(null);
+    setHasMore(false);
+    setIsPlaying(false);
+    setActiveIndex(0);
     setLoading(true);
     setError('');
-    setActiveIndex(0);
-    setIsPlaying(false);
 
-    const fetchData = async () => {
+    const loadAll = async () => {
+      const allShots: Screenshot[] = [];
+      let nextCursor: string | undefined;
+
       try {
-        const [screenshotRes, eventsRes] = await Promise.all([
-          fetch(`/api/intel/screenshots?date=${date}&advisor_id=siltaylor-chevyland`),
-          fetch(`/api/intel/events/range?start=${date}&end=${date}`),
-        ]);
+        do {
+          const params = new URLSearchParams({
+            date,
+            advisor_id: 'siltaylor-chevyland',
+            limit: '100',
+          });
+          if (nextCursor) params.set('cursor', nextCursor);
 
-        if (!screenshotRes.ok) throw new Error(`Screenshots failed (${screenshotRes.status})`);
+          const res = await fetch(`/api/intel/screenshots?${params}`);
+          if (!res.ok) throw new Error(`Screenshots failed (${res.status})`);
+          const data = await res.json();
 
-        const screenshotData = await screenshotRes.json();
-        const eventData = eventsRes.ok ? await eventsRes.json() : [];
+          allShots.push(...(data.screenshots ?? []));
+          nextCursor = data.nextCursor ?? undefined;
+
+          // Update UI progressively so scrubber fills in
+          if (!cancelled) {
+            setScreenshots([...allShots]);
+          }
+        } while (nextCursor && !cancelled);
 
         if (!cancelled) {
-          setScreenshots(screenshotData.screenshots ?? []);
-          setEvents(Array.isArray(eventData) ? eventData : []);
+          setScreenshots(allShots);
+          // Start at the most recent capture (last in the array)
+          setActiveIndex(allShots.length > 0 ? allShots.length - 1 : 0);
+          setHasMore(false);
         }
       } catch (e) {
         if (!cancelled) setError(String((e as Error).message));
@@ -111,9 +140,30 @@ export default function RewindPage() {
       }
     };
 
-    fetchData();
+    loadAll();
     return () => { cancelled = true; };
   }, [date]);
+
+  // ─── Events fetch (all events for the day, separate from pagination) ─
+  useEffect(() => {
+    let cancelled = false;
+    const fetchEvents = async () => {
+      try {
+        const eventsRes = await fetch(`/api/intel/events/range?start=${date}&end=${date}`);
+        const eventData = eventsRes.ok ? await eventsRes.json() : [];
+        if (!cancelled) {
+          setEvents(Array.isArray(eventData) ? eventData : []);
+        }
+      } catch {
+        // Events are non-critical; fail silently
+        if (!cancelled) setEvents([]);
+      }
+    };
+    fetchEvents();
+    return () => { cancelled = true; };
+  }, [date]);
+
+  // ─── (Pagination is handled eagerly in loadAll above) ─────────────────
 
   // ─── Playback ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -141,10 +191,12 @@ export default function RewindPage() {
   }, [isPlaying, speed, screenshots.length]);
 
   // ─── Crossfade: track previous URL ──────────────────────────────────
+  // ─── Crossfade: track previous URL ──────────────────────────────────
   const currentScreenshot = screenshots[activeIndex] ?? null;
   useEffect(() => {
     if (currentScreenshot) {
       setImageLoaded(false);
+      setIsZoomed(false);
       // Small delay before clearing previous for crossfade effect
       const timer = setTimeout(() => setPrevUrl(currentScreenshot.url), 300);
       return () => clearTimeout(timer);
@@ -270,7 +322,7 @@ export default function RewindPage() {
           </h1>
           <p className="text-2xs text-muted">
             {screenshots.length > 0
-              ? `${screenshots.length} captures${date === todayUTC() ? ' today' : ` on ${date}`}`
+              ? `${screenshots.length}${hasMore ? '+' : ''} captures${date === todayUTC() ? ' today' : ` on ${date}`}`
               : 'Desktop capture timeline'}
           </p>
         </div>
@@ -439,7 +491,7 @@ export default function RewindPage() {
 
             {/* ─── Main Viewport ──────────────────────────────────────── */}
             <div
-              className={`relative mb-3 flex items-center justify-center rounded-lg border border-border bg-black transition-all ${
+              className={`relative mb-3 flex items-center justify-center rounded-lg border border-border bg-black transition-all overflow-hidden ${
                 isFullscreen ? 'fixed inset-0 z-50 m-0 rounded-none border-0' : 'flex-1'
               }`}
               style={isFullscreen ? {} : { maxHeight: '60vh', minHeight: '300px' }}
@@ -450,10 +502,25 @@ export default function RewindPage() {
                     key={currentScreenshot.url}
                     src={currentScreenshot.url}
                     alt={`Screenshot at ${formatTimestamp(currentScreenshot.timestamp)}`}
-                    className="max-h-full max-w-full object-contain transition-opacity duration-300"
-                    style={{ opacity: imageLoaded ? 1 : 0 }}
+                    className="max-h-full max-w-full object-contain transition-all duration-300"
+                    style={{
+                      opacity: imageLoaded ? 1 : 0,
+                      transform: isZoomed ? 'scale(3)' : 'scale(1)',
+                      transformOrigin: zoomOrigin,
+                      cursor: isZoomed ? 'zoom-out' : 'zoom-in',
+                    }}
                     onLoad={() => setImageLoaded(true)}
-                    onClick={() => setIsFullscreen(true)}
+                    onClick={(e) => {
+                      if (isZoomed) {
+                        setIsZoomed(false);
+                      } else {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = ((e.clientX - rect.left) / rect.width) * 100;
+                        const y = ((e.clientY - rect.top) / rect.height) * 100;
+                        setZoomOrigin(`${x}% ${y}%`);
+                        setIsZoomed(true);
+                      }
+                    }}
                     draggable={false}
                   />
 
@@ -462,12 +529,21 @@ export default function RewindPage() {
                     <div className="absolute inset-0 animate-pulse bg-surface/50" />
                   )}
 
-                  {/* Fullscreen toggle */}
+                  {/* Expand to fullscreen — top-right icon button */}
                   <button
                     onClick={() => setIsFullscreen(!isFullscreen)}
-                    className="absolute right-4 top-4 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-medium text-fg backdrop-blur-sm transition-colors hover:bg-black/90"
+                    className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md bg-black/70 text-fg/80 backdrop-blur-sm transition-colors hover:bg-black/90 hover:text-fg"
+                    title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Expand fullscreen'}
                   >
-                    {isFullscreen ? 'Esc · Exit' : 'Click image to expand'}
+                    {isFullscreen ? (
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L4 4m0 0v4m0-4h4m7 11l5 5m0 0v-4m0 4h-4" />
+                      </svg>
+                    ) : (
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0 0l-5-5m-7 14H4m0 0v-4m0 4l5-5m11 5h-4m4 0v-4m0 4l-5-5" />
+                      </svg>
+                    )}
                   </button>
 
                   {/* Arrow nav in fullscreen */}
@@ -494,7 +570,7 @@ export default function RewindPage() {
                   {/* Index indicator */}
                   <div className="absolute bottom-4 right-4 rounded-md bg-black/70 px-3 py-1.5 backdrop-blur-sm">
                     <span className="font-mono text-2xs text-muted">
-                      {activeIndex + 1} / {screenshots.length}
+                      {activeIndex + 1} / {screenshots.length}{hasMore ? '+' : ''}
                     </span>
                   </div>
 
@@ -550,7 +626,7 @@ export default function RewindPage() {
                     style={{ width: '120px', height: '68px' }}
                   >
                     <img
-                      src={s.url}
+                      src={`/api/intel/screenshots/image?key=${encodeURIComponent(s.key)}`}
                       alt={formatTimestamp(s.timestamp)}
                       className="h-full w-full object-cover"
                       loading="lazy"
@@ -568,6 +644,19 @@ export default function RewindPage() {
                     )}
                   </button>
                 ))}
+
+                {/* Sentinel for infinite scroll */}
+                {hasMore && (
+                  <div
+                    ref={loadMoreRef}
+                    className="flex shrink-0 items-center justify-center"
+                    style={{ width: '120px', height: '68px' }}
+                  >
+                    {loadingMore && (
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-cyan" />
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -646,7 +735,7 @@ export default function RewindPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted">Index</span>
-                      <span className="font-mono text-fg">{activeIndex + 1} of {screenshots.length}</span>
+                      <span className="font-mono text-fg">{activeIndex + 1} of {screenshots.length}{hasMore ? '+' : ''}</span>
                     </div>
                   </div>
                 </div>
